@@ -217,3 +217,5 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 OCEAN AI CRM running on port ${PORT}`);
   console.log(`📊 Dashboard: http://localhost:${PORT}`);
 });
+
+module.exports = app;
