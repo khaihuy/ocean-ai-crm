@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const crypto = require('crypto');
+const { parse: csvParseSync } = require('csv-parse/sync');
 const db = require('./database');
 
 const app = express();
@@ -332,23 +333,31 @@ app.post('/api/cosing/import-csv', (req, res) => {
     return res.status(400).json({ error: 'Body must be { csv: "...", filename: "..." }' });
   }
 
-  let lines = csv.split(/\r?\n/).filter(l => l.trim());
-  // Skip leading metadata lines ("File creation date:", "sep=,", BOM, etc.)
-  while (lines.length > 0 && !lines[0].match(/cosing|inci|cas|function|restriction/i)) {
-    lines = lines.slice(1);
-  }
-  if (lines.length < 2) return res.status(400).json({ error: 'CSV has no data rows' });
-
-  const delim   = detectDelimiter(lines[0]);
-  const rawHdrs = parseCsvLine(lines[0], delim);
-  const hdrs    = mapHeaders(rawHdrs);
+  // Skip metadata lines before real CSV header
+  const metaEnd = csv.search(/^["']?(COSING\s+Ref|INCI\s*name|INCI\s*Name)/im);
+  const csvBody = metaEnd > 0 ? csv.slice(metaEnd) : csv;
 
   // Infer annex from filename if rows have no Regulation/Restriction column
   // e.g. COSING_Annex.V_v2.csv → "V"
   const filenameAnnex = filename ? parseAnnex(filename) : null;
 
-  if (!hdrs.includes('inci_name')) {
-    return res.status(400).json({ error: 'No INCI Name column found', headers: rawHdrs });
+  let records, rawHdrsRef = [];
+  try {
+    records = csvParseSync(csvBody, {
+      columns: (rawHdrs) => {
+        rawHdrsRef = rawHdrs;
+        return mapHeaders(rawHdrs);
+      },
+      skip_empty_lines: true,
+      relax_quotes: true,
+      trim: true,
+    });
+  } catch (parseErr) {
+    return res.status(400).json({ error: parseErr.message });
+  }
+
+  if (!records.length || !Object.keys(records[0]).includes('inci_name')) {
+    return res.status(400).json({ error: 'No INCI Name column found', headers: rawHdrsRef });
   }
 
   const insert = db.prepare(`
@@ -359,11 +368,7 @@ app.post('/api/cosing/import-csv', (req, res) => {
 
   let imported = 0, skipped = 0;
   const tx = db.transaction(() => {
-    for (let i = 1; i < lines.length; i++) {
-      const vals = parseCsvLine(lines[i], delim);
-      const row  = {};
-      hdrs.forEach((h, idx) => { row[h] = vals[idx] || null; });
-
+    for (const row of records) {
       const inci = row.inci_name;
       if (!inci || inci === 'INCI Name') { skipped++; continue; }
 
@@ -414,23 +419,25 @@ app.get('/api/cosing/auto-import', async (req, res) => {
     const csv = await response.text();
     send({ status: 'parsing', msg: `Đã tải ${(csv.length / 1024).toFixed(0)} KB. Đang parse...` });
 
-    // Split lines, skip metadata/BOM lines until real header row
-    let lines = csv.split(/\r?\n/).filter(l => l.trim());
-    // Skip any leading non-data lines: "File creation date:", "sep=,", BOM, etc.
-    while (lines.length > 0 && !lines[0].match(/^["']?(COSING\s+Ref|INCI\s*name|INCI\s*Name)/i)) {
-      lines = lines.slice(1);
-    }
-    if (lines.length < 2) throw new Error('CSV không có dữ liệu');
+    // Skip metadata lines before real CSV header (e.g. "File creation date:", title rows)
+    const metaEnd = csv.search(/^["']?(COSING\s+Ref|INCI\s*name|INCI\s*Name)/im);
+    const csvBody = metaEnd > 0 ? csv.slice(metaEnd) : csv;
 
-    const delim   = detectDelimiter(lines[0]);
-    const rawHdrs = parseCsvLine(lines[0], delim);
-    const hdrs    = mapHeaders(rawHdrs);
+    // Parse using csv-parse to correctly handle multi-line quoted fields
+    const records = csvParseSync(csvBody, {
+      columns: (rawHdrs) => {
+        const hdrs = mapHeaders(rawHdrs);
+        if (!hdrs.includes('inci_name')) {
+          throw new Error(`Không tìm thấy cột INCI Name. Headers: ${rawHdrs.join(', ')}`);
+        }
+        return hdrs;
+      },
+      skip_empty_lines: true,
+      relax_quotes: true,
+      trim: true,
+    });
 
-    if (!hdrs.includes('inci_name')) {
-      throw new Error(`Không tìm thấy cột INCI Name. Headers: ${rawHdrs.join(', ')}`);
-    }
-
-    send({ status: 'importing', msg: `${lines.length - 1} dòng, bắt đầu import...` });
+    send({ status: 'importing', msg: `${records.length.toLocaleString()} dòng, bắt đầu import...` });
 
     const insert = db.prepare(`
       INSERT OR REPLACE INTO cosing_ingredients
@@ -442,14 +449,10 @@ app.get('/api/cosing/auto-import', async (req, res) => {
     let imported = 0, skipped = 0;
     const BATCH = 1000;
 
-    for (let start = 1; start < lines.length; start += BATCH) {
-      const end = Math.min(start + BATCH, lines.length);
+    for (let start = 0; start < records.length; start += BATCH) {
+      const batch = records.slice(start, start + BATCH);
       const tx = db.transaction(() => {
-        for (let i = start; i < end; i++) {
-          const vals = parseCsvLine(lines[i], delim);
-          const row  = {};
-          hdrs.forEach((h, idx) => { row[h] = vals[idx] || null; });
-
+        for (const row of batch) {
           const inci = row.inci_name;
           if (!inci) { skipped++; return; }
 
@@ -465,7 +468,7 @@ app.get('/api/cosing/auto-import', async (req, res) => {
       });
       tx();
 
-      const pct = Math.round((end / lines.length) * 100);
+      const pct = Math.round(((start + batch.length) / records.length) * 100);
       send({ status: 'progress', imported, skipped, pct, msg: `${imported.toLocaleString()} thành phần...` });
     }
 
