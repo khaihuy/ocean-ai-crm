@@ -96,6 +96,7 @@ db.exec(`
   -- CosIng EU ingredients database
   CREATE TABLE IF NOT EXISTS cosing_ingredients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cosing_ref_no TEXT,
     inci_name TEXT NOT NULL,
     cas_no TEXT,
     ec_no TEXT,
@@ -123,6 +124,16 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_cosing_inci ON cosing_ingredients(inci_name);
   CREATE INDEX IF NOT EXISTS idx_cosing_cas ON cosing_ingredients(cas_no);
 `);
+
+// ============================================================
+// MIGRATIONS — add columns to existing DBs
+// ============================================================
+const cols = db.prepare("PRAGMA table_info(cosing_ingredients)").all().map(c => c.name);
+if (!cols.includes('cosing_ref_no')) {
+  db.prepare("ALTER TABLE cosing_ingredients ADD COLUMN cosing_ref_no TEXT").run();
+  // Known ref numbers from CosIng EU
+  db.prepare("UPDATE cosing_ingredients SET cosing_ref_no = '41309' WHERE inci_name = 'POLYSILICONE-15'").run();
+}
 
 // ============================================================
 // SEED SAMPLE DATA

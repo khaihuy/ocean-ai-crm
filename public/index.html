@@ -547,7 +547,7 @@ async function doSearch(q) {
 // Keeping only display helpers:
 const _COSING_DB_REMOVED = [
   // --- Annex VI: UV Filters ---
-  { inci:'POLYSILICONE-15', cas:'207574-74-1', ec:'606-621-9', fn:'UV Absorber, UV Filter, Light Stabilizer', annex:'VI', max:'10%' },
+  { inci:'POLYSILICONE-15', cas:'207574-74-1', ec:'426-000-4', fn:'UV Absorber, UV Filter, Light Stabilizer', annex:'VI', max:'10%' },
   { inci:'TITANIUM DIOXIDE', cas:'13463-67-7', ec:'236-675-5', fn:'Colorant, Opacifying, UV Absorber, UV Filter', annex:'VI', max:'25%' },
   { inci:'ZINC OXIDE', cas:'1314-13-2', ec:'215-222-5', fn:'Astringent, Opacifying, Skin Protecting, UV Absorber, UV Filter', annex:'VI', max:'25%' },
   { inci:'BUTYL METHOXYDIBENZOYLMETHANE', cas:'70356-09-1', ec:'274-581-6', fn:'UV Absorber, UV Filter', annex:'VI', max:'5%' },
@@ -922,7 +922,9 @@ function cosingCard(r, idx) {
   const al = COSING_ANNEX_LABEL[annex] || annex;
   const fns = (r.functions || '').split(',').map(f => f.trim()).filter(Boolean)
     .map(f => `<span style="display:inline-block;padding:2px 7px;border-radius:9px;font-size:11px;background:var(--primary-light);color:var(--primary);margin:1px">${f}</span>`).join(' ');
-  const cosUrl = `https://ec.europa.eu/growth/tools-databases/cosing/`;
+  const cosUrl = r.cosing_ref_no
+    ? `https://ec.europa.eu/growth/tools-databases/cosing/details/${r.cosing_ref_no}`
+    : `https://ec.europa.eu/growth/tools-databases/cosing/`;
 
   return `<div class="card mb-8" style="padding:16px">
     <div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleCosing(${idx})">

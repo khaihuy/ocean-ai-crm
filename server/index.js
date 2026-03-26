@@ -238,14 +238,14 @@ app.post('/api/cosing/import', (req, res) => {
   if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'Body must be a non-empty array' });
   const insert = db.prepare(`
     INSERT OR REPLACE INTO cosing_ingredients
-      (inci_name, cas_no, ec_no, functions, annex, max_conc, origin, uv_range, sccs_assessment, sccs_ref, source, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+      (cosing_ref_no, inci_name, cas_no, ec_no, functions, annex, max_conc, origin, uv_range, sccs_assessment, sccs_ref, source, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `);
   let count = 0;
   const tx = db.transaction(() => {
     for (const r of rows) {
       if (!r.inci_name) continue;
-      insert.run(r.inci_name, r.cas_no||null, r.ec_no||null, r.functions||null, r.annex||null, r.max_conc||null, r.origin||null, r.uv_range||null, r.sccs_assessment||null, r.sccs_ref||null, r.source||'import');
+      insert.run(r.cosing_ref_no||null, r.inci_name, r.cas_no||null, r.ec_no||null, r.functions||null, r.annex||null, r.max_conc||null, r.origin||null, r.uv_range||null, r.sccs_assessment||null, r.sccs_ref||null, r.source||'import');
       count++;
     }
   });
@@ -295,6 +295,7 @@ function mapHeaders(headers) {
   return headers.map(h => {
     const n = h.toLowerCase().replace(/[\s.\-\/\(\)]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
     // INCI name — "Name of Common Ingredients Glossary" or "INCI Name"
+    if (/reference_number|cosing_ref|^ref_no$/.test(n)) return 'cosing_ref_no';
     if (/common_ingredients_glossary|inci_name|^inci$/.test(n)) return 'inci_name';
     // CAS
     if (/cas/.test(n)) return 'cas_no';
@@ -347,8 +348,8 @@ app.post('/api/cosing/import-csv', (req, res) => {
 
   const insert = db.prepare(`
     INSERT OR REPLACE INTO cosing_ingredients
-      (inci_name, cas_no, ec_no, functions, annex, max_conc, origin, uv_range, sccs_assessment, sccs_ref, source, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'cosing_csv', datetime('now'))
+      (cosing_ref_no, inci_name, cas_no, ec_no, functions, annex, max_conc, origin, uv_range, sccs_assessment, sccs_ref, source, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'cosing_csv', datetime('now'))
   `);
 
   let imported = 0, skipped = 0;
@@ -363,6 +364,7 @@ app.post('/api/cosing/import-csv', (req, res) => {
 
       const annex = parseAnnex(row.annex_raw) || row.annex || filenameAnnex || null;
       insert.run(
+        row.cosing_ref_no || null,
         inci,
         row.cas_no   || null,
         row.ec_no    || null,
