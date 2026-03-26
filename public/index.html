@@ -451,8 +451,13 @@ function renderSearch() {
             <svg width="16" height="16" fill="none" stroke="var(--primary)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
             <span class="fw-600 text-primary fs-13">Cơ sở dữ liệu CosIng — European Commission</span>
           </div>
-          <div class="flex items-center gap-8">
+          <div class="flex items-center gap-8 flex-wrap">
             <span id="cosingDbCount" class="fs-12 text-gray"></span>
+            <span class="fs-12 text-gray">Tham chiếu:</span>
+            <a href="https://ec.europa.eu/growth/tools-databases/cosing/reference/annexes" target="_blank" rel="noopener" class="fs-12" style="color:var(--primary)">Annexes</a>
+            <a href="https://ec.europa.eu/growth/tools-databases/cosing/reference/regulations" target="_blank" rel="noopener" class="fs-12" style="color:var(--primary)">Regulations</a>
+            <a href="https://ec.europa.eu/growth/tools-databases/cosing/reference/functions" target="_blank" rel="noopener" class="fs-12" style="color:var(--primary)">Functions</a>
+            <a href="https://ec.europa.eu/growth/tools-databases/cosing/reference/abbreviations" target="_blank" rel="noopener" class="fs-12" style="color:var(--primary)">Abbreviations</a>
             <button class="btn btn-outline btn-sm" onclick="showCosingImport()" style="font-size:12px">
               <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               Import CSV
@@ -468,9 +473,11 @@ function renderSearch() {
         <div class="fw-600 mb-12">Import CSV từ CosIng EU</div>
         <div style="font-size:13px;color:var(--gray);margin-bottom:12px;line-height:1.6">
           <strong>Cách tải CSV:</strong> Truy cập
-          <a href="https://ec.europa.eu/growth/tools-databases/cosing/" target="_blank" rel="noopener" style="color:var(--primary)">CosIng EU →</a>
+          <a href="https://ec.europa.eu/growth/tools-databases/cosing/search" target="_blank" rel="noopener" style="color:var(--primary)">CosIng EU →</a>
           → Search (để trống) → Export → Download CSV (~30.000 thành phần).
           <br>Format hỗ trợ: CSV phân cách bằng <code>;</code> hoặc <code>,</code>, header tiếng Anh.
+          Hoặc tải file CSV đã có sẵn từ
+          <a href="https://github.com/openfoodfacts/openbeautyfacts/tree/develop/cosing" target="_blank" rel="noopener" style="color:var(--primary)">Open Beauty Facts →</a>
         </div>
         <div id="csvDropZone"
           ondragover="event.preventDefault();this.style.background='var(--primary-light)'"
@@ -876,7 +883,7 @@ function scheduleCosingSearch(q) {
 async function doCosingSearch(q) {
   const statusEl = document.getElementById('cosingStatus');
   const resultsEl = document.getElementById('cosingResults');
-  const verifyUrl = `https://ec.europa.eu/growth/tools-databases/cosing/?name=${encodeURIComponent(q)}`;
+  const verifyUrl = `https://ec.europa.eu/growth/tools-databases/cosing/search?name=${encodeURIComponent(q)}`;
 
   statusEl.innerHTML = `<span class="text-gray">Đang tìm kiếm...</span>`;
   resultsEl.innerHTML = '';
@@ -915,7 +922,7 @@ function cosingCard(r, idx) {
   const al = COSING_ANNEX_LABEL[annex] || annex;
   const fns = (r.functions || '').split(',').map(f => f.trim()).filter(Boolean)
     .map(f => `<span style="display:inline-block;padding:2px 7px;border-radius:9px;font-size:11px;background:var(--primary-light);color:var(--primary);margin:1px">${f}</span>`).join(' ');
-  const cosUrl = `https://ec.europa.eu/growth/tools-databases/cosing/?name=${encodeURIComponent(r.inci_name)}`;
+  const cosUrl = `https://ec.europa.eu/growth/tools-databases/cosing/search?name=${encodeURIComponent(r.inci_name)}`;
 
   return `<div class="card mb-8" style="padding:16px">
     <div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleCosing(${idx})">
