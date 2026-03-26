@@ -763,6 +763,62 @@ const COSING_ANNEX_LABEL = {
   'III':'Annex III (Restricted)', 'II':'Annex II (PROHIBITED)', '—':'—',
 };
 
+// Extended detail data (SCCS opinions, UV range, origin)
+const COSING_EXTRA = {
+  // UV Filters
+  'POLYSILICONE-15':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-B (280–320 nm)', sccs:'Ủy ban Khoa học EU (SCCNFP) kết luận an toàn ở nồng độ tối đa 10%. Hấp thu qua da rất thấp (~2%). Không gây kích ứng, nhạy cảm, đột biến gen hay bất thường lâm sàng trong thử nghiệm cấp tính, bán mãn và mãn tính.', ref:'SCCS/SCCNFP/0557/03' },
+  'TITANIUM DIOXIDE':{ origin:'Khoáng chất (Mineral)', uv_range:'UV-A/UV-B (290–360 nm, phổ rộng)', sccs:'An toàn ở nồng độ tối đa 25%. Dạng nano (≥30nm): an toàn trên da không bị tổn thương. Không gây độc tế bào, không rối loạn nội tiết.', ref:'SCCS/0921/14; SCCS/1514/13' },
+  'ZINC OXIDE':{ origin:'Khoáng chất (Mineral)', uv_range:'UV-A/UV-B (290–400 nm, phổ rộng)', sccs:'An toàn ở nồng độ tối đa 25% (cả dạng không nano và nano ≥30nm). Không xâm nhập qua tế bào da sống.', ref:'SCCS/1489/12; SCCS/1586/17' },
+  'BUTYL METHOXYDIBENZOYLMETHANE':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-A (320–400 nm)', sccs:'An toàn ở nồng độ tối đa 5%. Có thể gây dị ứng tiếp xúc ở một số trường hợp nhạy cảm. Ổn định quang học kém khi đứng một mình — nên kết hợp với chất ổn định quang học.', ref:'SCCNFP/0401/00' },
+  'BENZOPHENONE-3':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-A/UV-B (270–350 nm, phổ rộng)', sccs:'An toàn ở 6% (chỉ mặt) và 2% (toàn thân). Có khả năng hấp thu qua da đáng kể. Một số lo ngại về rối loạn nội tiết ở liều cao — không dùng cho trẻ dưới 6 tháng tuổi.', ref:'SCCS/1546/15' },
+  'ETHYLHEXYL METHOXYCINNAMATE':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-B (295–328 nm)', sccs:'An toàn ở nồng độ tối đa 10%. Là bộ lọc UV-B tan trong dầu phổ biến nhất thế giới. Ổn định quang học khi kết hợp phù hợp.', ref:'SCCNFP/0059/97' },
+  'ETHYLHEXYL SALICYLATE':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-B (290–320 nm)', sccs:'An toàn ở nồng độ tối đa 5%. Thường dùng kết hợp với Avobenzone để tăng ổn định quang học.', ref:'SCCNFP/0352/00' },
+  'ETHYLHEXYL TRIAZONE':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-B (280–320 nm)', sccs:'An toàn ở nồng độ tối đa 5%. Hấp thu qua da rất thấp. Không tan trong nước.', ref:'SCCNFP/0538/01' },
+  'HOMOSALATE':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-B (295–315 nm)', sccs:'Nồng độ tối đa được giảm từ 10% xuống 7.34% (2021) do lo ngại tiềm năng gây rối loạn nội tiết (endocrine disruption). Cần tiếp tục theo dõi.', ref:'SCCS/1622/20' },
+  '4-METHYLBENZYLIDENE CAMPHOR':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-B (295–315 nm)', sccs:'An toàn ở 4%. Tuy nhiên có lo ngại về tiềm năng gây rối loạn nội tiết và ảnh hưởng tuyến giáp — đang được xem xét lại bởi SCCS.', ref:'SCCS/1414/11' },
+  'PHENYLBENZIMIDAZOLE SULFONIC ACID':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-B (282–330 nm)', sccs:'An toàn ở nồng độ tối đa 8% (tính theo acid). Tan trong nước — phù hợp cho nền nước nhẹ. Hấp thu qua da thấp.', ref:'SCCNFP/0229/99' },
+  'CAMPHOR BENZALKONIUM METHOSULFATE':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-B (290–320 nm)', sccs:'An toàn ở nồng độ tối đa 6%. Tan trong nước.', ref:'—' },
+  'TEREPHTHALYLIDENE DICAMPHOR SULFONIC ACID':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-A/UV-B (280–360 nm)', sccs:'An toàn ở nồng độ tối đa 10% (tính theo acid). Tan trong nước. Không hấp thu qua da đáng kể. Bền quang.', ref:'SCCNFP/0467/01' },
+  'DROMETRIZOLE TRISILOXANE':{ origin:'Tổng hợp (Synthetic — Silicone)', uv_range:'UV-A/UV-B (290–380 nm)', sccs:'An toàn ở nồng độ tối đa 15%. Phân tử silicone gắn nhóm benzotriazole, ổn định quang học tốt. Không gây kích ứng hay nhạy cảm.', ref:'SCCS/0895/05' },
+  'METHYLENE BIS-BENZOTRIAZOLYL TETRAMETHYLBUTYLPHENOL':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-A/UV-B (280–400 nm, phổ rộng)', sccs:'An toàn ở nồng độ tối đa 10% (dạng huyền phù nano). Bộ lọc phổ rộng, bền quang học cao.', ref:'SCCS/1400/11' },
+  'BIS-ETHYLHEXYLOXYPHENOL METHOXYPHENYL TRIAZINE':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-A/UV-B (280–400 nm, phổ rộng)', sccs:'An toàn ở nồng độ tối đa 10%. Hấp thu qua da <1%. Bộ lọc phổ rộng, bền quang học, không tan trong nước.', ref:'SCCS/1411/11' },
+  'DIETHYLAMINO HYDROXYBENZOYL HEXYL BENZOATE':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-A (320–400 nm)', sccs:'An toàn ở nồng độ tối đa 10%. Hấp thu qua da thấp. Không gây kích ứng, nhạy cảm hay đột biến gen.', ref:'SCCS/1368/10' },
+  'ISOAMYL P-METHOXYCINNAMATE':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-B (290–320 nm)', sccs:'An toàn ở nồng độ tối đa 10%. Là đồng phân của Ethylhexyl Methoxycinnamate.', ref:'—' },
+  'ETHYLHEXYL DIMETHYL PABA':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-B (280–320 nm)', sccs:'An toàn ở nồng độ tối đa 8%.', ref:'—' },
+  'BENZOPHENONE-4':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-A/UV-B (260–380 nm)', sccs:'An toàn ở nồng độ tối đa 5% (tính theo acid). Tan trong nước.', ref:'—' },
+  'BENZOPHENONE-5':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-A/UV-B (280–380 nm)', sccs:'An toàn ở nồng độ tối đa 5% (tính theo acid).', ref:'—' },
+  'BENZOPHENONE-6':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-A/UV-B (280–380 nm)', sccs:'An toàn ở nồng độ tối đa 10%.', ref:'—' },
+  'BENZOPHENONE-8':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-A/UV-B (280–380 nm)', sccs:'An toàn ở nồng độ tối đa 3%.', ref:'—' },
+  'TRIETHANOLAMINE SALICYLATE':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-B (290–320 nm)', sccs:'An toàn ở nồng độ tối đa 12%.', ref:'—' },
+  'DIISOPROPYL CINNAMIC ACID':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-B (290–320 nm)', sccs:'An toàn ở nồng độ tối đa 10%.', ref:'—' },
+  'ISCOTRIZINOL':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-A/UV-B (280–380 nm, phổ rộng)', sccs:'An toàn ở nồng độ tối đa 10%. Bộ lọc phổ rộng, không tan trong nước.', ref:'—' },
+  'TRIS-BIPHENYL TRIAZINE':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-B (280–320 nm)', sccs:'An toàn ở nồng độ tối đa 10%. Dạng hạt rắn không tan.', ref:'—' },
+  'CAMPHOR BENZALKONIUM METHOSULFATE':{ origin:'Tổng hợp (Synthetic)', uv_range:'UV-B (290–320 nm)', sccs:'An toàn ở nồng độ tối đa 6%.', ref:'—' },
+  // Preservatives
+  'PHENOXYETHANOL':{ origin:'Tổng hợp (Synthetic)', sccs:'An toàn ở 1% trong mọi loại mỹ phẩm. SCCS tái xác nhận an toàn năm 2016. Không dùng quá 1% cho trẻ sơ sinh dưới 3 tuổi (đặc biệt vùng quấn tã).', ref:'SCCS/1525/13' },
+  'METHYLPARABEN':{ origin:'Tổng hợp (Synthetic)', sccs:'An toàn ở 0.4% (đơn chất) hoặc 0.8% (hỗn hợp paraben). Methylparaben và Ethylparaben không bị hạn chế cho vùng quấn tã.', ref:'SCCS/1348/10' },
+  'PROPYLPARABEN':{ origin:'Tổng hợp (Synthetic)', sccs:'An toàn ở 0.14% (Propylparaben + Butylparaben cộng lại không quá 0.14%). Không dùng trong sản phẩm bôi vùng quấn tã của trẻ sơ sinh và nhỏ (<3 tuổi).', ref:'SCCS/1348/10' },
+  'BUTYLPARABEN':{ origin:'Tổng hợp (Synthetic)', sccs:'An toàn ở 0.14% (tính chung với Propylparaben). Không dùng trong sản phẩm bôi vùng quấn tã của trẻ dưới 3 tuổi.', ref:'SCCS/1348/10' },
+  'FORMALDEHYDE':{ origin:'Tổng hợp (Synthetic)', sccs:'Được phép ở 0.2% (0.1% trong vệ sinh răng miệng). Là chất gây dị ứng và kích ứng. Bắt buộc ghi nhãn "chứa Formaldehyde" nếu nồng độ >0.05%.', ref:'SCCS/1538/14' },
+  'DMDM HYDANTOIN':{ origin:'Tổng hợp (Synthetic)', sccs:'Là chất giải phóng formaldehyde (formaldehyde releaser). An toàn ở 0.6%. Cần ghi nhãn cảnh báo formaldehyde nếu nồng độ giải phóng >0.05%.', ref:'—' },
+  // Restricted & Prohibited
+  'HYDROQUINONE':{ origin:'Tổng hợp (Synthetic)', sccs:'KHÔNG an toàn cho mục đích làm trắng da trong mỹ phẩm thông thường. Chỉ được phép 0.3% trong nhuộm tóc oxi hóa. SCCS/0844/04 xác nhận nguy cơ ung thư khi dùng kéo dài trên da toàn thân.', ref:'SCCS/0844/04' },
+  'SALICYLIC ACID':{ origin:'Tổng hợp (Synthetic)', sccs:'An toàn ở 2% (chăm sóc mặt/cơ thể) và 3% (dầu gội). Không dùng cho trẻ dưới 3 tuổi ngoại trừ dầu gội. Sản phẩm ngày phải kèm khuyến cáo bảo vệ nắng.', ref:'SCCS/1601/18' },
+  'TRICLOSAN':{ origin:'Tổng hợp (Synthetic)', sccs:'Bị hạn chế nghiêm ngặt từ 2014. Chỉ được 0.3% trong kem đánh răng, nước súc miệng và sữa rửa mặt. Bị cấm hoàn toàn trong xịt mũi và phấn.', ref:'SCCS/1452/11' },
+  'KOJIC ACID':{ origin:'Sinh học (Biotechnology)', sccs:'An toàn ở max 1% trong kem chăm sóc mặt và tay. Liều cao hơn gây kích ứng và lo ngại ung thư trên thử nghiệm động vật.', ref:'SCCS/1622/21' },
+  'RESORCINOL':{ origin:'Tổng hợp (Synthetic)', sccs:'An toàn ở 0.5% chỉ trong sản phẩm nhuộm tóc oxi hóa. Bị cấm trong các mỹ phẩm thông thường khác do nguy cơ nội tiết.', ref:'SCCS/1076/14' },
+  'BUTYLPHENYL METHYLPROPIONAL':{ origin:'Tổng hợp (Synthetic)', sccs:'BỊ CẤM hoàn toàn từ 01/03/2022 (Regulation EU 2021/1099). Được phân loại là chất gây rối loạn sinh sản (Reprotoxic Category 1B theo CLP). Không được có mặt trong bất kỳ sản phẩm mỹ phẩm nào lưu hành trên thị trường EU từ ngày 01/3/2022.', ref:'EU 2021/1099' },
+  'HYDROXYISOHEXYL 3-CYCLOHEXENE CARBOXALDEHYDE':{ origin:'Tổng hợp (Synthetic)', sccs:'BỊ CẤM hoàn toàn do gây dị ứng tiếp xúc nghiêm trọng (strong contact allergen). Thuộc Annex II từ 2019 (EU 2019/1966).', ref:'SCCS/1341/09; EU 2019/1966' },
+  'RETINOIC ACID':{ origin:'Tổng hợp (Synthetic)', sccs:'BỊ CẤM hoàn toàn trong mỹ phẩm (Annex II). Chỉ được sử dụng trong thuốc kê đơn (Tretinoin). Gây dị tật bẩm sinh khi hấp thu toàn thân.', ref:'EU 1223/2009 Annex II' },
+  // Actives
+  'RETINOL':{ origin:'Tổng hợp (Synthetic)', sccs:'SCCS khuyến nghị tối đa 0.3% (mặt) và 0.05% (cơ thể) cho người lớn. Không dùng cho trẻ dưới 3 tuổi. Sản phẩm chứa >0.05% retinol phải có cảnh báo tránh tiếp xúc nắng.', ref:'SCCS/1576/16' },
+  'ALPHA-ARBUTIN':{ origin:'Tổng hợp (Synthetic)', sccs:'An toàn ở 2% (mặt) và 0.5% (cơ thể). Là tiền chất của Hydroquinone — cần theo dõi kỹ nồng độ và điều kiện sử dụng.', ref:'SCCS/1652/22' },
+  'ARBUTIN':{ origin:'Tự nhiên/Tổng hợp', sccs:'An toàn ở 7% (mặt). Là tiền chất của Hydroquinone — cần kiểm soát chặt độ tinh khiết và nồng độ sử dụng.', ref:'SCCS/1652/22' },
+  'GLYCOLIC ACID':{ origin:'Tổng hợp (Synthetic)', sccs:'An toàn ở 10% (pH ≥3.5) cho sản phẩm người tiêu dùng. Nồng độ cao hơn chỉ dành cho chuyên gia. Bắt buộc có nhãn cảnh báo bảo vệ nắng khi dùng ban ngày.', ref:'SCCS/1598/18' },
+  'LACTIC ACID':{ origin:'Tự nhiên/Tổng hợp', sccs:'An toàn ở 10% (pH ≥3.5). Áp dụng khuyến nghị tương tự Glycolic Acid (AHA). Cần cảnh báo bảo vệ nắng.', ref:'SCCS/1598/18' },
+  'NIACINAMIDE':{ origin:'Tổng hợp (Synthetic)', sccs:'An toàn ở các nồng độ thông thường trong mỹ phẩm. Không có lo ngại an toàn đặc biệt.', ref:'—' },
+};
+
 let cosingTimer = null;
 function scheduleCosingSearch(q) {
   clearTimeout(cosingTimer);
@@ -800,30 +856,72 @@ function doCosingSearch(q) {
       <a href="${verifyUrl}" target="_blank" rel="noopener" style="color:var(--primary)">Xác minh trên CosIng &rarr;</a>
     </span>`;
 
-  let html = `<div class="card" style="overflow-x:auto"><table>
-    <thead><tr>
-      <th>INCI Name</th><th>CAS No.</th><th>EC No.</th><th>Functions</th><th>EU Annex</th><th>Nồng độ tối đa</th><th></th>
-    </tr></thead><tbody>`;
+  resultsEl.innerHTML = results.map((r, i) => cosingCard(r, i)).join('');
+}
 
-  results.forEach(r => {
-    const ac = COSING_ANNEX_COLOR[r.annex] || COSING_ANNEX_COLOR['—'];
-    const al = COSING_ANNEX_LABEL[r.annex] || r.annex;
-    const fnBadges = r.fn.split(',').map(f => f.trim()).filter(Boolean)
-      .map(f => `<span style="display:inline-block;padding:2px 7px;border-radius:9px;font-size:11px;background:var(--primary-light);color:var(--primary);margin:1px;white-space:nowrap">${f}</span>`).join(' ');
-    const cosUrl = `https://ec.europa.eu/growth/tools-databases/cosing/index.cfm?fuseaction=search.results&search_term=${encodeURIComponent(r.inci)}&search_wtype=INCI`;
-    html += `<tr>
-      <td class="fw-600" style="white-space:nowrap">${r.inci}</td>
-      <td class="fs-12 text-gray" style="white-space:nowrap">${r.cas}</td>
-      <td class="fs-12 text-gray" style="white-space:nowrap">${r.ec}</td>
-      <td>${fnBadges}</td>
-      <td><span class="badge" style="color:${ac};white-space:nowrap">${al}</span></td>
-      <td class="fs-12 fw-600" style="white-space:nowrap">${r.max}</td>
-      <td><a href="${cosUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">CosIng &rarr;</a></td>
-    </tr>`;
-  });
+function cosingCard(r, idx) {
+  const ac = COSING_ANNEX_COLOR[r.annex] || COSING_ANNEX_COLOR['—'];
+  const al = COSING_ANNEX_LABEL[r.annex] || r.annex;
+  const fnBadges = r.fn.split(',').map(f => f.trim()).filter(Boolean)
+    .map(f => `<span style="display:inline-block;padding:2px 7px;border-radius:9px;font-size:11px;background:var(--primary-light);color:var(--primary);margin:1px">${f}</span>`).join(' ');
+  const extra = COSING_EXTRA[r.inci] || {};
+  const cosUrl = `https://ec.europa.eu/growth/tools-databases/cosing/index.cfm?fuseaction=search.results&search_term=${encodeURIComponent(r.inci)}&search_wtype=INCI`;
 
-  html += '</tbody></table></div>';
-  resultsEl.innerHTML = html;
+  return `<div class="card mb-8" style="padding:16px">
+    <div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleCosing(${idx})">
+      <div>
+        <span class="fw-600" style="font-size:15px">${r.inci}</span>
+        <span class="fs-12 text-gray" style="margin-left:10px">CAS: ${r.cas}</span>
+        ${r.ec !== '—' ? `<span class="fs-12 text-gray" style="margin-left:6px">· EC: ${r.ec}</span>` : ''}
+      </div>
+      <div class="flex items-center gap-8">
+        <span class="badge" style="color:${ac};white-space:nowrap">${al}</span>
+        ${r.max !== '—' ? `<span class="fs-12 fw-600 text-primary" style="white-space:nowrap">${r.max}</span>` : ''}
+        <svg id="arr-${idx}" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="flex-shrink:0;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+    </div>
+    <div style="margin-top:8px">${fnBadges}</div>
+    <div id="det-${idx}" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <div class="grid-2" style="gap:20px">
+        <div>
+          <div class="fs-12 fw-600 text-gray" style="margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Thông tin nhận dạng</div>
+          <table style="font-size:13px;width:100%;border-collapse:collapse">
+            <tr><td style="color:var(--gray);padding:4px 0;width:130px">INCI Name</td><td class="fw-600">${r.inci}</td></tr>
+            <tr><td style="color:var(--gray);padding:4px 0">CAS Number</td><td>${r.cas}</td></tr>
+            <tr><td style="color:var(--gray);padding:4px 0">EC Number</td><td>${r.ec}</td></tr>
+            <tr><td style="color:var(--gray);padding:4px 0">Nguồn gốc</td><td>${extra.origin || '—'}</td></tr>
+            ${extra.uv_range ? `<tr><td style="color:var(--gray);padding:4px 0">Dải UV hấp thụ</td><td class="fw-600 text-primary">${extra.uv_range}</td></tr>` : ''}
+          </table>
+        </div>
+        <div>
+          <div class="fs-12 fw-600 text-gray" style="margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Quy định EU</div>
+          <table style="font-size:13px;width:100%;border-collapse:collapse">
+            <tr><td style="color:var(--gray);padding:4px 0;width:130px">Chức năng</td><td>${r.fn}</td></tr>
+            <tr><td style="color:var(--gray);padding:4px 0">Phụ lục (Annex)</td><td><span class="badge" style="color:${ac}">${al}</span></td></tr>
+            <tr><td style="color:var(--gray);padding:4px 0">Nồng độ tối đa</td><td class="fw-600 text-primary">${r.max}</td></tr>
+            <tr><td style="color:var(--gray);padding:4px 0">Quy định gốc</td><td class="fs-12">EC No. 1223/2009</td></tr>
+            ${extra.ref && extra.ref !== '—' ? `<tr><td style="color:var(--gray);padding:4px 0">Tham chiếu SCCS</td><td class="fs-12">${extra.ref}</td></tr>` : ''}
+          </table>
+        </div>
+      </div>
+      ${extra.sccs ? `
+        <div style="margin-top:14px;padding:14px;background:var(--primary-light);border-radius:8px">
+          <div class="fs-12 fw-600 text-primary" style="margin-bottom:6px">Đánh giá an toàn (SCCS/SCCNFP)</div>
+          <p class="fs-13" style="line-height:1.6;margin:0">${extra.sccs}</p>
+        </div>` : ''}
+      <div style="margin-top:12px">
+        <a href="${cosUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Xác minh trên CosIng EU &rarr;</a>
+      </div>
+    </div>
+  </div>`;
+}
+
+function toggleCosing(idx) {
+  const el = document.getElementById('det-' + idx);
+  const arr = document.getElementById('arr-' + idx);
+  const open = el.style.display !== 'none';
+  el.style.display = open ? 'none' : 'block';
+  arr.style.transform = open ? '' : 'rotate(180deg)';
 }
 
 // ============================================================
