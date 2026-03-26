@@ -493,81 +493,177 @@ async function doSearch(q) {
   document.getElementById('searchResults').innerHTML = html;
 }
 
+// ============================================================
+// COSING EU — LOCAL OFFLINE DATABASE
+// Source: European Commission CosIng Database (ec.europa.eu)
+// ============================================================
+const COSING_DB = [
+  // --- Annex VI: UV Filters ---
+  { inci:'POLYSILICONE-15', cas:'207574-74-1', ec:'606-621-9', fn:'UV Absorber, UV Filter, Light Stabilizer', annex:'VI', max:'10%' },
+  { inci:'TITANIUM DIOXIDE', cas:'13463-67-7', ec:'236-675-5', fn:'Colorant, Opacifying, UV Absorber, UV Filter', annex:'VI', max:'25%' },
+  { inci:'ZINC OXIDE', cas:'1314-13-2', ec:'215-222-5', fn:'Astringent, Opacifying, Skin Protecting, UV Absorber, UV Filter', annex:'VI', max:'25%' },
+  { inci:'BUTYL METHOXYDIBENZOYLMETHANE', cas:'70356-09-1', ec:'274-581-6', fn:'UV Absorber, UV Filter', annex:'VI', max:'5%' },
+  { inci:'BENZOPHENONE-3', cas:'131-57-7', ec:'205-031-5', fn:'UV Absorber, UV Filter', annex:'VI', max:'6%' },
+  { inci:'BENZOPHENONE-4', cas:'4065-45-6', ec:'223-772-2', fn:'UV Absorber, UV Filter', annex:'VI', max:'5% (as acid)' },
+  { inci:'BENZOPHENONE-5', cas:'6628-37-1', ec:'229-581-2', fn:'UV Absorber, UV Filter', annex:'VI', max:'5% (as acid)' },
+  { inci:'BENZOPHENONE-6', cas:'552-41-0', ec:'209-003-2', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'BENZOPHENONE-8', cas:'131-53-3', ec:'205-026-8', fn:'UV Absorber, UV Filter', annex:'VI', max:'3%' },
+  { inci:'ETHYLHEXYL METHOXYCINNAMATE', cas:'5466-77-3', ec:'226-775-7', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'ETHYLHEXYL SALICYLATE', cas:'118-60-5', ec:'204-263-4', fn:'UV Absorber, UV Filter', annex:'VI', max:'5%' },
+  { inci:'ETHYLHEXYL TRIAZONE', cas:'88122-99-0', ec:'402-070-1', fn:'UV Absorber, UV Filter', annex:'VI', max:'5%' },
+  { inci:'ETHYLHEXYL DIMETHYL PABA', cas:'21245-02-3', ec:'244-289-3', fn:'UV Absorber, UV Filter', annex:'VI', max:'8%' },
+  { inci:'HOMOSALATE', cas:'118-56-9', ec:'204-260-8', fn:'UV Absorber, UV Filter', annex:'VI', max:'7.34%' },
+  { inci:'4-METHYLBENZYLIDENE CAMPHOR', cas:'38102-62-4', ec:'253-242-6', fn:'UV Absorber, UV Filter', annex:'VI', max:'4%' },
+  { inci:'PHENYLBENZIMIDAZOLE SULFONIC ACID', cas:'27503-81-7', ec:'248-502-0', fn:'UV Absorber, UV Filter', annex:'VI', max:'8% (as acid)' },
+  { inci:'CAMPHOR BENZALKONIUM METHOSULFATE', cas:'52793-97-2', ec:'258-254-2', fn:'UV Absorber, UV Filter', annex:'VI', max:'6%' },
+  { inci:'TEREPHTHALYLIDENE DICAMPHOR SULFONIC ACID', cas:'92761-26-7', ec:'297-538-1', fn:'UV Absorber, UV Filter', annex:'VI', max:'10% (as acid)' },
+  { inci:'DROMETRIZOLE TRISILOXANE', cas:'155633-54-8', ec:'429-080-7', fn:'UV Absorber, UV Filter', annex:'VI', max:'15%' },
+  { inci:'METHYLENE BIS-BENZOTRIAZOLYL TETRAMETHYLBUTYLPHENOL', cas:'103597-45-1', ec:'403-800-1', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'BIS-ETHYLHEXYLOXYPHENOL METHOXYPHENYL TRIAZINE', cas:'187393-00-6', ec:'424-990-7', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'DIETHYLAMINO HYDROXYBENZOYL HEXYL BENZOATE', cas:'302776-68-7', ec:'441-170-7', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'ISOAMYL P-METHOXYCINNAMATE', cas:'71617-10-2', ec:'275-702-5', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'TRIETHANOLAMINE SALICYLATE', cas:'2174-16-5', ec:'218-531-3', fn:'UV Absorber, UV Filter', annex:'VI', max:'12%' },
+  { inci:'DIISOPROPYL CINNAMIC ACID', cas:'6386-71-6', ec:'229-006-8', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'ISCOTRIZINOL', cas:'137658-79-8', ec:'422-380-4', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'TRIS-BIPHENYL TRIAZINE', cas:'31274-51-8', ec:'250-537-5', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  // --- Annex V: Preservatives ---
+  { inci:'PHENOXYETHANOL', cas:'122-99-6', ec:'204-589-7', fn:'Preservative, Solvent', annex:'V', max:'1%' },
+  { inci:'METHYLPARABEN', cas:'99-76-3', ec:'202-785-7', fn:'Preservative', annex:'V', max:'0.4% (single) / 0.8% (mixture)' },
+  { inci:'ETHYLPARABEN', cas:'120-47-8', ec:'204-399-4', fn:'Preservative', annex:'V', max:'0.4% (single)' },
+  { inci:'PROPYLPARABEN', cas:'94-13-3', ec:'202-307-7', fn:'Preservative', annex:'V', max:'0.14%' },
+  { inci:'BUTYLPARABEN', cas:'94-26-8', ec:'202-318-7', fn:'Preservative', annex:'V', max:'0.14%' },
+  { inci:'BENZYL ALCOHOL', cas:'100-51-6', ec:'202-859-9', fn:'Masking, Preservative, Solvent, Viscosity Controlling', annex:'V', max:'1%' },
+  { inci:'SODIUM BENZOATE', cas:'532-32-1', ec:'208-534-8', fn:'Preservative', annex:'V', max:'0.5%' },
+  { inci:'BENZOIC ACID', cas:'65-85-0', ec:'200-618-2', fn:'Preservative', annex:'V', max:'0.5%' },
+  { inci:'SORBIC ACID', cas:'110-44-1', ec:'203-768-7', fn:'Preservative', annex:'V', max:'0.6%' },
+  { inci:'POTASSIUM SORBATE', cas:'24634-61-5', ec:'246-376-1', fn:'Preservative', annex:'V', max:'0.6% (as sorbic acid)' },
+  { inci:'DEHYDROACETIC ACID', cas:'520-45-6', ec:'208-293-9', fn:'Preservative', annex:'V', max:'0.6% (as acid)' },
+  { inci:'CHLORPHENESIN', cas:'104-29-0', ec:'203-192-7', fn:'Preservative', annex:'V', max:'0.3%' },
+  { inci:'DMDM HYDANTOIN', cas:'6440-58-0', ec:'229-222-8', fn:'Preservative', annex:'V', max:'0.6%' },
+  { inci:'IMIDAZOLIDINYL UREA', cas:'39236-46-9', ec:'254-372-6', fn:'Preservative', annex:'V', max:'0.6%' },
+  { inci:'DIAZOLIDINYL UREA', cas:'78491-02-8', ec:'278-928-2', fn:'Preservative', annex:'V', max:'0.5%' },
+  { inci:'CHLOROXYLENOL', cas:'88-04-0', ec:'201-793-8', fn:'Preservative', annex:'V', max:'0.5%' },
+  { inci:'CAPRYLYL GLYCOL', cas:'1117-86-8', ec:'214-254-7', fn:'Emollient, Humectant, Preservative', annex:'V', max:'—' },
+  { inci:'ETHYLHEXYLGLYCERIN', cas:'70445-33-9', ec:'274-681-6', fn:'Deodorant, Preservative, Skin Conditioning', annex:'V', max:'—' },
+  { inci:'POLYAMINOPROPYL BIGUANIDE', cas:'28757-47-3', ec:'—', fn:'Antimicrobial, Preservative', annex:'V', max:'0.3%' },
+  { inci:'SODIUM HYDROXYMETHYLGLYCINATE', cas:'70161-44-3', ec:'274-357-8', fn:'Preservative', annex:'V', max:'0.5%' },
+  { inci:'FORMALDEHYDE', cas:'50-00-0', ec:'200-001-8', fn:'Preservative', annex:'V', max:'0.2% (0.1% oral hygiene)' },
+  // --- Annex III: Restricted Substances ---
+  { inci:'SALICYLIC ACID', cas:'69-72-7', ec:'200-712-3', fn:'Exfoliant, Keratolytic, Preservative', annex:'III', max:'2% (face/body) / 3% (hair rinse)' },
+  { inci:'HYDROQUINONE', cas:'123-31-9', ec:'204-617-8', fn:'Hair Dyeing, Skin Conditioning', annex:'III', max:'0.3% (oxidative hair dye only; prohibited for skin lightening)' },
+  { inci:'RESORCINOL', cas:'108-46-3', ec:'203-585-2', fn:'Hair Dyeing, Skin Conditioning', annex:'III', max:'0.5% (hair dye only)' },
+  { inci:'TRICLOSAN', cas:'3380-34-5', ec:'222-182-2', fn:'Deodorant, Preservative', annex:'III', max:'0.3% (toothpaste/face wash/deodorant only)' },
+  { inci:'KOJIC ACID', cas:'501-30-4', ec:'207-922-4', fn:'Skin Conditioning, Skin Lightening', annex:'III', max:'1% (face/hand care)' },
+  { inci:'ALPHA-ISOMETHYL IONONE', cas:'127-51-5', ec:'204-846-3', fn:'Fragrance, Masking', annex:'III', max:'Labeling required >0.001% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'COLOPHONIUM', cas:'8050-09-7', ec:'232-475-7', fn:'Binding, Film Forming', annex:'III', max:'Labeling required (allergen)' },
+  // --- Active Ingredients (no specific Annex restriction) ---
+  { inci:'RETINOL', cas:'68-26-8', ec:'200-683-7', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'0.3% face / 0.05% body (SCCS rec.)' },
+  { inci:'RETINYL PALMITATE', cas:'79-81-2', ec:'201-228-5', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'RETINYL ACETATE', cas:'127-47-9', ec:'204-844-2', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'NIACINAMIDE', cas:'98-92-0', ec:'202-713-4', fn:'Skin Conditioning, Smoothing', annex:'—', max:'—' },
+  { inci:'ASCORBIC ACID', cas:'50-81-7', ec:'200-066-2', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'ASCORBYL GLUCOSIDE', cas:'129499-78-1', ec:'—', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'SODIUM ASCORBYL PHOSPHATE', cas:'66170-10-3', ec:'266-149-9', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'ASCORBYL TETRAISOPALMITATE', cas:'183476-82-6', ec:'—', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'TOCOPHEROL', cas:'59-02-9', ec:'200-412-2', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'TOCOPHERYL ACETATE', cas:'58-95-7', ec:'200-405-4', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'HYALURONIC ACID', cas:'9004-61-9', ec:'—', fn:'Film Forming, Humectant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'SODIUM HYALURONATE', cas:'9067-32-7', ec:'—', fn:'Humectant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'GLYCOLIC ACID', cas:'79-14-1', ec:'201-180-5', fn:'Exfoliant, Humectant, Keratolytic', annex:'—', max:'10% pH≥3.5 (consumer)' },
+  { inci:'LACTIC ACID', cas:'79-33-4', ec:'201-196-2', fn:'Buffering, Exfoliant, Humectant, Keratolytic', annex:'—', max:'10% pH≥3.5 (consumer)' },
+  { inci:'MANDELIC ACID', cas:'90-64-2', ec:'202-007-0', fn:'Exfoliant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'AZELAIC ACID', cas:'123-99-9', ec:'204-669-1', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'TRANEXAMIC ACID', cas:'1197-18-8', ec:'214-818-2', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'ADENOSINE', cas:'58-61-7', ec:'200-386-2', fn:'Skin Conditioning, Smoothing', annex:'—', max:'—' },
+  { inci:'ALPHA-ARBUTIN', cas:'84380-01-8', ec:'282-602-2', fn:'Skin Conditioning', annex:'—', max:'2% face / 0.5% body (SCCS rec.)' },
+  { inci:'ARBUTIN', cas:'497-76-7', ec:'207-850-3', fn:'Skin Conditioning', annex:'—', max:'7% face (SCCS rec.)' },
+  { inci:'PANTHENOL', cas:'81-13-0', ec:'201-327-3', fn:'Antistatic, Emollient, Hair Conditioning, Humectant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'ALLANTOIN', cas:'97-59-6', ec:'202-592-8', fn:'Skin Conditioning, Soothing', annex:'—', max:'—' },
+  { inci:'CAFFEINE', cas:'58-08-2', ec:'200-362-1', fn:'Masking, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'RESVERATROL', cas:'501-36-0', ec:'207-929-1', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'BAKUCHIOL', cas:'10309-37-2', ec:'233-749-0', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'GLUTATHIONE', cas:'70-18-8', ec:'200-725-4', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'CERAMIDE NP', cas:'74713-59-0', ec:'—', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'COLLAGEN', cas:'9007-34-5', ec:'—', fn:'Film Forming, Hair Conditioning, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'BIOTIN', cas:'58-85-5', ec:'200-399-3', fn:'Hair Conditioning, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'BISABOLOL', cas:'515-69-5', ec:'208-205-9', fn:'Anti-Inflammatory, Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'CENTELLA ASIATICA EXTRACT', cas:'84696-21-9', ec:'283-641-2', fn:'Skin Conditioning, Soothing', annex:'—', max:'—' },
+  { inci:'MADECASSOSIDE', cas:'34540-22-2', ec:'—', fn:'Skin Conditioning, Soothing', annex:'—', max:'—' },
+  { inci:'ASIATICOSIDE', cas:'16830-15-2', ec:'—', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'COPPER GLUCONATE', cas:'527-09-3', ec:'208-408-2', fn:'Skin Conditioning', annex:'—', max:'—' },
+];
+
+const COSING_ANNEX_COLOR = {
+  'VI': '#059669;background:#d1fae5',   // UV Filter - green
+  'V':  '#1a56db;background:#e8effe',   // Preservative - blue
+  'III':'#d97706;background:#fef3c7',   // Restricted - yellow
+  'II': '#dc2626;background:#fee2e2',   // Prohibited - red
+  '—':  '#6b7280;background:#f3f4f6',   // No restriction - gray
+};
+
+const COSING_ANNEX_LABEL = { 'VI':'Annex VI (UV Filter)', 'V':'Annex V (Preservative)', 'III':'Annex III (Restricted)', 'II':'Annex II (Prohibited)', '—':'—' };
+
 let cosingTimer = null;
 function scheduleCosingSearch(q) {
   clearTimeout(cosingTimer);
-  if (q.length < 2) {
-    document.getElementById('cosingResults').innerHTML = '';
-    document.getElementById('cosingStatus').textContent = '';
-    return;
-  }
-  document.getElementById('cosingStatus').innerHTML = '<span style="color:var(--primary)">Đang tra cứu CosIng EU...</span>';
-  cosingTimer = setTimeout(() => doCosingSearch(q), 600);
-}
-
-async function doCosingSearch(q) {
   const statusEl = document.getElementById('cosingStatus');
   const resultsEl = document.getElementById('cosingResults');
-  try {
-    const res = await api(`/api/cosing/search?q=${encodeURIComponent(q)}`);
-
-    if (res.error && res.results.length === 0) {
-      statusEl.textContent = '';
-      resultsEl.innerHTML = `
-        <div class="card" style="text-align:center;padding:32px">
-          <div class="fs-13 text-danger" style="margin-bottom:12px">${res.error}</div>
-          <a href="${res.search_url}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">
-            Mở CosIng trực tiếp &rarr;
-          </a>
-        </div>`;
-      return;
-    }
-
-    statusEl.textContent = res.results.length > 0 ? `Tìm thấy ${res.results.length} thành phần` : '';
-    if (res.results.length === 0) {
-      resultsEl.innerHTML = `
-        <div class="card" style="text-align:center;padding:32px">
-          <div class="fs-13 text-gray" style="margin-bottom:12px">Không tìm thấy thành phần phù hợp với "<strong>${q}</strong>"</div>
-          <a href="${res.search_url}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Tìm trên CosIng &rarr;</a>
-        </div>`;
-      return;
-    }
-
-    let html = `<div class="card" style="overflow-x:auto">
-      <div class="flex justify-between items-center mb-16">
-        <span class="fw-600 fs-13">Kết quả từ CosIng EU (${res.results.length})</span>
-        <a href="${res.search_url}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Xem trên CosIng &rarr;</a>
-      </div>
-      <table>
-        <thead><tr>
-          <th>INCI Name</th><th>CAS No.</th><th>EC No.</th><th>Functions</th><th>Restrictions</th><th></th>
-        </tr></thead>
-        <tbody>`;
-
-    res.results.forEach(r => {
-      const detailUrl = r.id
-        ? `https://ec.europa.eu/growth/tools-databases/cosing/details/${r.id}`
-        : res.search_url;
-      const fnBadges = r.functions
-        ? r.functions.split(/[,;]/).map(f => f.trim()).filter(Boolean)
-            .map(f => `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;background:var(--primary-light);color:var(--primary);margin:1px">${f}</span>`).join(' ')
-        : '—';
-      html += `<tr>
-        <td class="fw-600">${r.inci_name}</td>
-        <td class="fs-12 text-gray">${r.cas_no || '—'}</td>
-        <td class="fs-12 text-gray">${r.ec_no || '—'}</td>
-        <td>${fnBadges}</td>
-        <td class="fs-12">${r.restrictions || '—'}</td>
-        <td><a href="${detailUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Chi tiết</a></td>
-      </tr>`;
-    });
-
-    html += '</tbody></table></div>';
-    resultsEl.innerHTML = html;
-  } catch (err) {
+  if (q.length < 2) {
+    resultsEl.innerHTML = '';
     statusEl.textContent = '';
-    resultsEl.innerHTML = `<div class="card" style="text-align:center;padding:32px;color:var(--danger)">Lỗi kết nối: ${err.message}</div>`;
+    return;
   }
+  cosingTimer = setTimeout(() => doCosingSearch(q), 300);
+}
+
+function doCosingSearch(q) {
+  const statusEl = document.getElementById('cosingStatus');
+  const resultsEl = document.getElementById('cosingResults');
+  const term = q.toLowerCase().trim();
+  const results = COSING_DB.filter(r =>
+    r.inci.toLowerCase().includes(term) || r.cas.includes(term)
+  );
+  const verifyUrl = `https://ec.europa.eu/growth/tools-databases/cosing/index.cfm?fuseaction=search.results&search_term=${encodeURIComponent(q)}&search_wtype=INCI`;
+
+  if (results.length === 0) {
+    statusEl.textContent = '';
+    resultsEl.innerHTML = `
+      <div class="card" style="text-align:center;padding:32px">
+        <div class="fs-13 text-gray" style="margin-bottom:12px">Không có trong offline cache với "<strong>${q}</strong>"</div>
+        <a href="${verifyUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Tìm trực tiếp trên CosIng EU &rarr;</a>
+      </div>`;
+    return;
+  }
+
+  statusEl.innerHTML = `<span style="color:var(--success)">Tìm thấy ${results.length} thành phần</span>
+    <span class="text-gray" style="margin-left:12px">· Nguồn: CosIng EU offline cache ·
+      <a href="${verifyUrl}" target="_blank" rel="noopener" style="color:var(--primary)">Xác minh trên CosIng &rarr;</a>
+    </span>`;
+
+  let html = `<div class="card" style="overflow-x:auto"><table>
+    <thead><tr>
+      <th>INCI Name</th><th>CAS No.</th><th>EC No.</th><th>Functions</th><th>EU Annex</th><th>Nồng độ tối đa</th><th></th>
+    </tr></thead><tbody>`;
+
+  results.forEach(r => {
+    const ac = COSING_ANNEX_COLOR[r.annex] || COSING_ANNEX_COLOR['—'];
+    const al = COSING_ANNEX_LABEL[r.annex] || r.annex;
+    const fnBadges = r.fn.split(',').map(f => f.trim()).filter(Boolean)
+      .map(f => `<span style="display:inline-block;padding:2px 7px;border-radius:9px;font-size:11px;background:var(--primary-light);color:var(--primary);margin:1px;white-space:nowrap">${f}</span>`).join(' ');
+    const cosUrl = `https://ec.europa.eu/growth/tools-databases/cosing/index.cfm?fuseaction=search.results&search_term=${encodeURIComponent(r.inci)}&search_wtype=INCI`;
+    html += `<tr>
+      <td class="fw-600" style="white-space:nowrap">${r.inci}</td>
+      <td class="fs-12 text-gray" style="white-space:nowrap">${r.cas}</td>
+      <td class="fs-12 text-gray" style="white-space:nowrap">${r.ec}</td>
+      <td>${fnBadges}</td>
+      <td><span class="badge" style="color:${ac};white-space:nowrap">${al}</span></td>
+      <td class="fs-12 fw-600" style="white-space:nowrap">${r.max}</td>
+      <td><a href="${cosUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">CosIng &rarr;</a></td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  resultsEl.innerHTML = html;
 }
 
 // ============================================================
