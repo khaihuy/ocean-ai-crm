@@ -1033,7 +1033,7 @@ async function handleCsvFile(file) {
     const resp = await fetch('/api/cosing/import-csv', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ csv }),
+      body: JSON.stringify({ csv, filename: file.name }),
     });
     data = await resp.json();
     if (!resp.ok) throw new Error(data.error || 'Server error');

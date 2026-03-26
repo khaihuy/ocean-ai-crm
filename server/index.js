@@ -285,20 +285,33 @@ function parseCsvLine(line, delim) {
 }
 
 // Map CosIng CSV header → our column name
-// Supports official CosIng export + common variations
+// Handles both:
+//   - Official CosIng Annex export (Annex III/V/VI from Open Beauty Facts)
+//     cols: "Name of Common Ingredients Glossary", "Maximum concentration in
+//           ready for use preparation", "SCCS opinions", "Regulation", etc.
+//   - Fragrance Inventory export: "INCI Name", "Function", "Restriction", "Annex"
+//   - Custom/simplified CSVs
 function mapHeaders(headers) {
   return headers.map(h => {
-    const n = h.toLowerCase().replace(/[\s.\-\/]+/g, '_');
-    if (/inci/.test(n))        return 'inci_name';
-    if (/cas/.test(n))         return 'cas_no';
-    if (/^ec_no|^ec$/.test(n)) return 'ec_no';
-    if (/function/.test(n))    return 'functions';
-    if (/restrict|annex/.test(n)) return 'annex_raw';
-    if (/max|conc/.test(n))    return 'max_conc';
-    if (/origin/.test(n))      return 'origin';
+    const n = h.toLowerCase().replace(/[\s.\-\/\(\)]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    // INCI name — "Name of Common Ingredients Glossary" or "INCI Name"
+    if (/common_ingredients_glossary|inci_name|^inci$/.test(n)) return 'inci_name';
+    // CAS
+    if (/cas/.test(n)) return 'cas_no';
+    // EC number
+    if (/^ec_no$|^ec_number$|^ec$/.test(n)) return 'ec_no';
+    // Functions
+    if (/^function/.test(n)) return 'functions';
+    // Max concentration — "Maximum concentration in ready for use preparation"
+    if (/maximum_concentration|max_conc|^conc/.test(n)) return 'max_conc';
+    // Annex / Restriction — "Regulation" col in Annex exports, or "Restriction"/"Annex"
+    if (/^regulation$|^restriction$|^annex$/.test(n)) return 'annex_raw';
+    // SCCS opinions (Annex export column name)
+    if (/sccs_opinion|sccs_ref/.test(n)) return 'sccs_ref';
+    if (/sccs|assessment/.test(n)) return 'sccs_assessment';
+    // Origin / UV (custom CSVs)
+    if (/origin/.test(n)) return 'origin';
     if (/uv_range|uv_filter/.test(n)) return 'uv_range';
-    if (/sccs|assessment/.test(n))    return 'sccs_assessment';
-    if (/ref/.test(n))         return 'sccs_ref';
     return n;
   });
 }
@@ -312,9 +325,9 @@ function parseAnnex(raw) {
 }
 
 app.post('/api/cosing/import-csv', (req, res) => {
-  const { csv } = req.body;
+  const { csv, filename } = req.body;
   if (!csv || typeof csv !== 'string') {
-    return res.status(400).json({ error: 'Body must be { csv: "..." }' });
+    return res.status(400).json({ error: 'Body must be { csv: "...", filename: "..." }' });
   }
 
   const lines = csv.split(/\r?\n/).filter(l => l.trim());
@@ -323,6 +336,10 @@ app.post('/api/cosing/import-csv', (req, res) => {
   const delim   = detectDelimiter(lines[0]);
   const rawHdrs = parseCsvLine(lines[0], delim);
   const hdrs    = mapHeaders(rawHdrs);
+
+  // Infer annex from filename if rows have no Regulation/Restriction column
+  // e.g. COSING_Annex.V_v2.csv → "V"
+  const filenameAnnex = filename ? parseAnnex(filename) : null;
 
   if (!hdrs.includes('inci_name')) {
     return res.status(400).json({ error: 'No INCI Name column found', headers: rawHdrs });
@@ -344,7 +361,7 @@ app.post('/api/cosing/import-csv', (req, res) => {
       const inci = row.inci_name;
       if (!inci || inci === 'INCI Name') { skipped++; continue; }
 
-      const annex = parseAnnex(row.annex_raw) || row.annex || null;
+      const annex = parseAnnex(row.annex_raw) || row.annex || filenameAnnex || null;
       insert.run(
         inci,
         row.cas_no   || null,
