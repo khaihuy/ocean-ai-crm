@@ -422,20 +422,50 @@ function renderFinance() {
 }
 
 // --- SEARCH PAGE ---
+let searchTab = 'crm';
 function renderSearch() {
   return `
     <h2 class="mb-24" style="font-size:22px">Tra cứu & Tìm kiếm</h2>
-    <div class="card mb-16">
-      <input type="text" id="searchInput" placeholder="Tìm kiếm theo tên khách hàng, số hợp đồng, tên hồ sơ, người phụ trách..."
-        style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid var(--primary);font-size:14px;outline:none"
-        oninput="doSearch(this.value)">
-      <div id="searchCount" class="fs-13 text-gray mt-8"></div>
+    <div class="flex gap-8 mb-16">
+      <button id="tab-crm" class="btn ${searchTab==='crm'?'btn-primary':'btn-outline'}" onclick="switchSearchTab('crm')">CRM</button>
+      <button id="tab-cosing" class="btn ${searchTab==='cosing'?'btn-primary':'btn-outline'}" onclick="switchSearchTab('cosing')">
+        <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        CosIng EU
+      </button>
     </div>
-    <div class="info-panel">
-      <h3 class="fs-15 text-primary" style="margin-bottom:8px">Tra cứu thành phần mỹ phẩm / thực phẩm (CosIng EU)</h3>
-      <p class="fs-13">Để tra cứu thành phần trên database CosIng của EU, hãy yêu cầu Claude AI tra cứu trực tiếp trong chat.</p>
+
+    <div id="panel-crm" style="display:${searchTab==='crm'?'block':'none'}">
+      <div class="card mb-16">
+        <input type="text" id="searchInput" placeholder="Tìm kiếm theo tên khách hàng, số hợp đồng, tên hồ sơ, người phụ trách..."
+          style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid var(--primary);font-size:14px;outline:none"
+          oninput="doSearch(this.value)">
+        <div id="searchCount" class="fs-13 text-gray mt-8"></div>
+      </div>
+      <div id="searchResults"></div>
     </div>
-    <div id="searchResults"></div>`;
+
+    <div id="panel-cosing" style="display:${searchTab==='cosing'?'block':'none'}">
+      <div class="card mb-16">
+        <div class="flex items-center gap-8" style="margin-bottom:8px">
+          <svg width="16" height="16" fill="none" stroke="var(--primary)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+          <span class="fw-600 text-primary fs-13">Cơ sở dữ liệu CosIng — European Commission</span>
+        </div>
+        <input type="text" id="cosingInput" placeholder="Nhập tên thành phần INCI (vd: Polysilicone-15, Titanium Dioxide, Retinol...)"
+          style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid var(--primary);font-size:14px;outline:none"
+          oninput="scheduleCosingSearch(this.value)">
+        <div id="cosingStatus" class="fs-13 text-gray mt-8"></div>
+      </div>
+      <div id="cosingResults"></div>
+    </div>`;
+}
+
+function switchSearchTab(tab) {
+  searchTab = tab;
+  document.getElementById('panel-crm').style.display = tab === 'crm' ? 'block' : 'none';
+  document.getElementById('panel-cosing').style.display = tab === 'cosing' ? 'block' : 'none';
+  document.getElementById('tab-crm').className = `btn ${tab==='crm'?'btn-primary':'btn-outline'}`;
+  document.getElementById('tab-cosing').className = `btn ${tab==='cosing'?'btn-primary':'btn-outline'}`;
+  if (tab === 'cosing') setTimeout(() => document.getElementById('cosingInput')?.focus(), 50);
 }
 
 async function doSearch(q) {
@@ -461,6 +491,83 @@ async function doSearch(q) {
   }
   if (total === 0) html = `<div class="card" style="text-align:center;padding:40px;color:var(--gray)">Không tìm thấy kết quả phù hợp với "${q}"</div>`;
   document.getElementById('searchResults').innerHTML = html;
+}
+
+let cosingTimer = null;
+function scheduleCosingSearch(q) {
+  clearTimeout(cosingTimer);
+  if (q.length < 2) {
+    document.getElementById('cosingResults').innerHTML = '';
+    document.getElementById('cosingStatus').textContent = '';
+    return;
+  }
+  document.getElementById('cosingStatus').innerHTML = '<span style="color:var(--primary)">Đang tra cứu CosIng EU...</span>';
+  cosingTimer = setTimeout(() => doCosingSearch(q), 600);
+}
+
+async function doCosingSearch(q) {
+  const statusEl = document.getElementById('cosingStatus');
+  const resultsEl = document.getElementById('cosingResults');
+  try {
+    const res = await api(`/api/cosing/search?q=${encodeURIComponent(q)}`);
+
+    if (res.error && res.results.length === 0) {
+      statusEl.textContent = '';
+      resultsEl.innerHTML = `
+        <div class="card" style="text-align:center;padding:32px">
+          <div class="fs-13 text-danger" style="margin-bottom:12px">${res.error}</div>
+          <a href="${res.search_url}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">
+            Mở CosIng trực tiếp &rarr;
+          </a>
+        </div>`;
+      return;
+    }
+
+    statusEl.textContent = res.results.length > 0 ? `Tìm thấy ${res.results.length} thành phần` : '';
+    if (res.results.length === 0) {
+      resultsEl.innerHTML = `
+        <div class="card" style="text-align:center;padding:32px">
+          <div class="fs-13 text-gray" style="margin-bottom:12px">Không tìm thấy thành phần phù hợp với "<strong>${q}</strong>"</div>
+          <a href="${res.search_url}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Tìm trên CosIng &rarr;</a>
+        </div>`;
+      return;
+    }
+
+    let html = `<div class="card" style="overflow-x:auto">
+      <div class="flex justify-between items-center mb-16">
+        <span class="fw-600 fs-13">Kết quả từ CosIng EU (${res.results.length})</span>
+        <a href="${res.search_url}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Xem trên CosIng &rarr;</a>
+      </div>
+      <table>
+        <thead><tr>
+          <th>INCI Name</th><th>CAS No.</th><th>EC No.</th><th>Functions</th><th>Restrictions</th><th></th>
+        </tr></thead>
+        <tbody>`;
+
+    res.results.forEach(r => {
+      const detailUrl = r.id
+        ? `https://ec.europa.eu/growth/tools-databases/cosing/details/${r.id}`
+        : res.search_url;
+      const fnBadges = r.functions
+        ? r.functions.split(/[,;]/).map(f => f.trim()).filter(Boolean)
+            .map(f => `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;background:var(--primary-light);color:var(--primary);margin:1px">${f}</span>`).join(' ')
+        : '—';
+      html += `<tr>
+        <td class="fw-600">${r.inci_name}</td>
+        <td class="fs-12 text-gray">${r.cas_no || '—'}</td>
+        <td class="fs-12 text-gray">${r.ec_no || '—'}</td>
+        <td>${fnBadges}</td>
+        <td class="fs-12">${r.restrictions || '—'}</td>
+        <td><a href="${detailUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Chi tiết</a></td>
+      </tr>`;
+    });
+
+    html += '</tbody></table></div>';
+    resultsEl.innerHTML = html;
+  } catch (err) {
+    statusEl.textContent = '';
+    resultsEl.innerHTML = `<div class="card" style="text-align:center;padding:32px;color:var(--danger)">Lỗi kết nối: ${err.message}</div>`;
+  }
 }
 
 // ============================================================
