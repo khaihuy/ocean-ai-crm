@@ -446,14 +446,50 @@ function renderSearch() {
 
     <div id="panel-cosing" style="display:${searchTab==='cosing'?'block':'none'}">
       <div class="card mb-16">
-        <div class="flex items-center gap-8" style="margin-bottom:8px">
-          <svg width="16" height="16" fill="none" stroke="var(--primary)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-          <span class="fw-600 text-primary fs-13">Cơ sở dữ liệu CosIng — European Commission</span>
+        <div class="flex justify-between items-center" style="margin-bottom:8px">
+          <div class="flex items-center gap-8">
+            <svg width="16" height="16" fill="none" stroke="var(--primary)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+            <span class="fw-600 text-primary fs-13">Cơ sở dữ liệu CosIng — European Commission</span>
+          </div>
+          <div class="flex items-center gap-8">
+            <span id="cosingDbCount" class="fs-12 text-gray"></span>
+            <button class="btn btn-outline btn-sm" onclick="showCosingImport()" style="font-size:12px">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Import CSV
+            </button>
+          </div>
         </div>
         <input type="text" id="cosingInput" placeholder="Nhập tên thành phần INCI (vd: Polysilicone-15, Titanium Dioxide, Retinol...)"
           style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid var(--primary);font-size:14px;outline:none"
           oninput="scheduleCosingSearch(this.value)">
         <div id="cosingStatus" class="fs-13 text-gray mt-8"></div>
+      </div>
+      <div id="cosingImportPanel" style="display:none" class="card mb-16">
+        <div class="fw-600 mb-12">Import CSV từ CosIng EU</div>
+        <div style="font-size:13px;color:var(--gray);margin-bottom:12px;line-height:1.6">
+          <strong>Cách tải CSV:</strong> Truy cập
+          <a href="https://ec.europa.eu/growth/tools-databases/cosing/index.cfm?fuseaction=search.results" target="_blank" rel="noopener" style="color:var(--primary)">CosIng EU →</a>
+          → Search (để trống) → Export → Download CSV (~30.000 thành phần).
+          <br>Format hỗ trợ: CSV phân cách bằng <code>;</code> hoặc <code>,</code>, header tiếng Anh.
+        </div>
+        <div id="csvDropZone"
+          ondragover="event.preventDefault();this.style.background='var(--primary-light)'"
+          ondragleave="this.style.background=''"
+          ondrop="handleCsvDrop(event)"
+          style="border:2px dashed var(--border);border-radius:10px;padding:32px;text-align:center;cursor:pointer;transition:.2s"
+          onclick="document.getElementById('csvFileInput').click()">
+          <svg width="32" height="32" fill="none" stroke="var(--gray)" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 8px;display:block"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <div class="fw-600 fs-13">Kéo thả file CSV vào đây hoặc click để chọn</div>
+          <div class="fs-12 text-gray mt-4">Hỗ trợ: .csv, .txt — tối đa 50MB</div>
+        </div>
+        <input type="file" id="csvFileInput" accept=".csv,.txt" style="display:none" onchange="handleCsvFile(this.files[0])">
+        <div id="csvProgress" style="display:none;margin-top:12px">
+          <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden">
+            <div id="csvProgressBar" style="height:100%;background:var(--primary);width:0%;transition:width .3s;border-radius:3px"></div>
+          </div>
+          <div id="csvProgressText" class="fs-12 text-gray mt-4"></div>
+        </div>
+        <div id="csvResult" style="display:none;margin-top:12px"></div>
       </div>
       <div id="cosingResults"></div>
     </div>`;
@@ -465,7 +501,10 @@ function switchSearchTab(tab) {
   document.getElementById('panel-cosing').style.display = tab === 'cosing' ? 'block' : 'none';
   document.getElementById('tab-crm').className = `btn ${tab==='crm'?'btn-primary':'btn-outline'}`;
   document.getElementById('tab-cosing').className = `btn ${tab==='cosing'?'btn-primary':'btn-outline'}`;
-  if (tab === 'cosing') setTimeout(() => document.getElementById('cosingInput')?.focus(), 50);
+  if (tab === 'cosing') {
+    setTimeout(() => document.getElementById('cosingInput')?.focus(), 50);
+    loadCosingStats();
+  }
 }
 
 async function doSearch(q) {
@@ -933,6 +972,94 @@ function toggleCosing(idx) {
   const open = el.style.display !== 'none';
   el.style.display = open ? 'none' : 'block';
   arr.style.transform = open ? '' : 'rotate(180deg)';
+}
+
+// Load DB stats when CosIng tab is active
+async function loadCosingStats() {
+  try {
+    const s = await fetch('/api/cosing/stats').then(r => r.json());
+    const el = document.getElementById('cosingDbCount');
+    if (el) el.textContent = s.total.toLocaleString() + ' thành phần';
+  } catch(e) {}
+}
+
+function showCosingImport() {
+  const panel = document.getElementById('cosingImportPanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+function handleCsvDrop(e) {
+  e.preventDefault();
+  document.getElementById('csvDropZone').style.background = '';
+  const file = e.dataTransfer.files[0];
+  if (file) handleCsvFile(file);
+}
+
+async function handleCsvFile(file) {
+  if (!file) return;
+  const maxMB = 50;
+  if (file.size > maxMB * 1024 * 1024) {
+    alert('File quá lớn (tối đa ' + maxMB + 'MB)');
+    return;
+  }
+
+  const dropZone = document.getElementById('csvDropZone');
+  const progress = document.getElementById('csvProgress');
+  const bar      = document.getElementById('csvProgressBar');
+  const pText    = document.getElementById('csvProgressText');
+  const result   = document.getElementById('csvResult');
+
+  dropZone.style.opacity = '0.5';
+  progress.style.display = 'block';
+  result.style.display   = 'none';
+  bar.style.width = '10%';
+  pText.textContent = `Đang đọc file: ${file.name} (${(file.size/1024).toFixed(0)} KB)...`;
+
+  let csv;
+  try {
+    csv = await file.text();
+  } catch(e) {
+    result.style.display = 'block';
+    result.innerHTML = `<div style="color:var(--danger)">Không đọc được file: ${e.message}</div>`;
+    dropZone.style.opacity = '';
+    return;
+  }
+
+  bar.style.width = '40%';
+  pText.textContent = 'Đang gửi lên server...';
+
+  let data;
+  try {
+    const resp = await fetch('/api/cosing/import-csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csv }),
+    });
+    data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || 'Server error');
+  } catch(e) {
+    bar.style.width = '0%';
+    result.style.display = 'block';
+    result.innerHTML = `<div style="color:var(--danger)">Lỗi: ${e.message}</div>`;
+    dropZone.style.opacity = '';
+    return;
+  }
+
+  bar.style.width = '100%';
+  pText.textContent = 'Hoàn thành!';
+  dropZone.style.opacity = '';
+  result.style.display = 'block';
+  result.innerHTML = `
+    <div style="padding:12px;background:#d1fae5;border-radius:8px;font-size:13px">
+      <div class="fw-600" style="color:#065f46;margin-bottom:4px">Import thành công!</div>
+      <div style="color:#047857">
+        ✅ Đã import: <strong>${data.imported.toLocaleString()}</strong> thành phần
+        ${data.skipped > 0 ? ` · ⏭ Bỏ qua: ${data.skipped}` : ''}
+        · Tổng trong DB: <strong>${data.total_in_db.toLocaleString()}</strong>
+      </div>
+    </div>`;
+  loadCosingStats();
+  document.getElementById('csvFileInput').value = '';
 }
 
 // ============================================================

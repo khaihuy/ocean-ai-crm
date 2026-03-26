@@ -253,6 +253,130 @@ app.post('/api/cosing/import', (req, res) => {
   res.json({ imported: count });
 });
 
+// ============================================================
+// API: COSING CSV IMPORT
+// POST /api/cosing/import-csv  { csv: "<raw csv text>" }
+// ============================================================
+
+// Detect delimiter from header row (semicolon or comma)
+function detectDelimiter(headerLine) {
+  const semicolons = (headerLine.match(/;/g) || []).length;
+  const commas    = (headerLine.match(/,/g) || []).length;
+  return semicolons >= commas ? ';' : ',';
+}
+
+// Parse one CSV line respecting double-quoted fields
+function parseCsvLine(line, delim) {
+  const fields = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQ && line[i+1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (ch === delim && !inQ) {
+      fields.push(cur.trim()); cur = '';
+    } else {
+      cur += ch;
+    }
+  }
+  fields.push(cur.trim());
+  return fields;
+}
+
+// Map CosIng CSV header → our column name
+// Supports official CosIng export + common variations
+function mapHeaders(headers) {
+  return headers.map(h => {
+    const n = h.toLowerCase().replace(/[\s.\-\/]+/g, '_');
+    if (/inci/.test(n))        return 'inci_name';
+    if (/cas/.test(n))         return 'cas_no';
+    if (/^ec_no|^ec$/.test(n)) return 'ec_no';
+    if (/function/.test(n))    return 'functions';
+    if (/restrict|annex/.test(n)) return 'annex_raw';
+    if (/max|conc/.test(n))    return 'max_conc';
+    if (/origin/.test(n))      return 'origin';
+    if (/uv_range|uv_filter/.test(n)) return 'uv_range';
+    if (/sccs|assessment/.test(n))    return 'sccs_assessment';
+    if (/ref/.test(n))         return 'sccs_ref';
+    return n;
+  });
+}
+
+// Extract annex code from restriction text
+// e.g. "Annex VI - UV Filters" → "VI"
+function parseAnnex(raw) {
+  if (!raw) return null;
+  const m = raw.match(/annex\s+(I{1,3}V?|VI?|IV|V)/i);
+  return m ? m[1].toUpperCase() : null;
+}
+
+app.post('/api/cosing/import-csv', (req, res) => {
+  const { csv } = req.body;
+  if (!csv || typeof csv !== 'string') {
+    return res.status(400).json({ error: 'Body must be { csv: "..." }' });
+  }
+
+  const lines = csv.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return res.status(400).json({ error: 'CSV has no data rows' });
+
+  const delim   = detectDelimiter(lines[0]);
+  const rawHdrs = parseCsvLine(lines[0], delim);
+  const hdrs    = mapHeaders(rawHdrs);
+
+  if (!hdrs.includes('inci_name')) {
+    return res.status(400).json({ error: 'No INCI Name column found', headers: rawHdrs });
+  }
+
+  const insert = db.prepare(`
+    INSERT OR REPLACE INTO cosing_ingredients
+      (inci_name, cas_no, ec_no, functions, annex, max_conc, origin, uv_range, sccs_assessment, sccs_ref, source, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'cosing_csv', datetime('now'))
+  `);
+
+  let imported = 0, skipped = 0;
+  const tx = db.transaction(() => {
+    for (let i = 1; i < lines.length; i++) {
+      const vals = parseCsvLine(lines[i], delim);
+      const row  = {};
+      hdrs.forEach((h, idx) => { row[h] = vals[idx] || null; });
+
+      const inci = row.inci_name;
+      if (!inci || inci === 'INCI Name') { skipped++; continue; }
+
+      const annex = parseAnnex(row.annex_raw) || row.annex || null;
+      insert.run(
+        inci,
+        row.cas_no   || null,
+        row.ec_no    || null,
+        row.functions|| null,
+        annex,
+        row.max_conc || null,
+        row.origin   || null,
+        row.uv_range || null,
+        row.sccs_assessment || null,
+        row.sccs_ref || null,
+      );
+      imported++;
+    }
+  });
+  tx();
+
+  const total = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
+  res.json({ imported, skipped, total_in_db: total });
+});
+
+app.delete('/api/cosing/clear', (req, res) => {
+  const { keep_seed } = req.query;
+  if (keep_seed === '1') {
+    db.prepare("DELETE FROM cosing_ingredients WHERE source = 'cosing_csv'").run();
+  } else {
+    db.prepare('DELETE FROM cosing_ingredients').run();
+  }
+  const total = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
+  res.json({ total_in_db: total });
+});
+
 // Serve frontend for all non-API routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
