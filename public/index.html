@@ -493,81 +493,337 @@ async function doSearch(q) {
   document.getElementById('searchResults').innerHTML = html;
 }
 
+// ============================================================
+// COSING EU — LOCAL OFFLINE DATABASE
+// Source: European Commission CosIng Database (ec.europa.eu)
+// ============================================================
+const COSING_DB = [
+  // --- Annex VI: UV Filters ---
+  { inci:'POLYSILICONE-15', cas:'207574-74-1', ec:'606-621-9', fn:'UV Absorber, UV Filter, Light Stabilizer', annex:'VI', max:'10%' },
+  { inci:'TITANIUM DIOXIDE', cas:'13463-67-7', ec:'236-675-5', fn:'Colorant, Opacifying, UV Absorber, UV Filter', annex:'VI', max:'25%' },
+  { inci:'ZINC OXIDE', cas:'1314-13-2', ec:'215-222-5', fn:'Astringent, Opacifying, Skin Protecting, UV Absorber, UV Filter', annex:'VI', max:'25%' },
+  { inci:'BUTYL METHOXYDIBENZOYLMETHANE', cas:'70356-09-1', ec:'274-581-6', fn:'UV Absorber, UV Filter', annex:'VI', max:'5%' },
+  { inci:'BENZOPHENONE-3', cas:'131-57-7', ec:'205-031-5', fn:'UV Absorber, UV Filter', annex:'VI', max:'6%' },
+  { inci:'BENZOPHENONE-4', cas:'4065-45-6', ec:'223-772-2', fn:'UV Absorber, UV Filter', annex:'VI', max:'5% (as acid)' },
+  { inci:'BENZOPHENONE-5', cas:'6628-37-1', ec:'229-581-2', fn:'UV Absorber, UV Filter', annex:'VI', max:'5% (as acid)' },
+  { inci:'BENZOPHENONE-6', cas:'552-41-0', ec:'209-003-2', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'BENZOPHENONE-8', cas:'131-53-3', ec:'205-026-8', fn:'UV Absorber, UV Filter', annex:'VI', max:'3%' },
+  { inci:'ETHYLHEXYL METHOXYCINNAMATE', cas:'5466-77-3', ec:'226-775-7', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'ETHYLHEXYL SALICYLATE', cas:'118-60-5', ec:'204-263-4', fn:'UV Absorber, UV Filter', annex:'VI', max:'5%' },
+  { inci:'ETHYLHEXYL TRIAZONE', cas:'88122-99-0', ec:'402-070-1', fn:'UV Absorber, UV Filter', annex:'VI', max:'5%' },
+  { inci:'ETHYLHEXYL DIMETHYL PABA', cas:'21245-02-3', ec:'244-289-3', fn:'UV Absorber, UV Filter', annex:'VI', max:'8%' },
+  { inci:'HOMOSALATE', cas:'118-56-9', ec:'204-260-8', fn:'UV Absorber, UV Filter', annex:'VI', max:'7.34%' },
+  { inci:'4-METHYLBENZYLIDENE CAMPHOR', cas:'38102-62-4', ec:'253-242-6', fn:'UV Absorber, UV Filter', annex:'VI', max:'4%' },
+  { inci:'PHENYLBENZIMIDAZOLE SULFONIC ACID', cas:'27503-81-7', ec:'248-502-0', fn:'UV Absorber, UV Filter', annex:'VI', max:'8% (as acid)' },
+  { inci:'CAMPHOR BENZALKONIUM METHOSULFATE', cas:'52793-97-2', ec:'258-254-2', fn:'UV Absorber, UV Filter', annex:'VI', max:'6%' },
+  { inci:'TEREPHTHALYLIDENE DICAMPHOR SULFONIC ACID', cas:'92761-26-7', ec:'297-538-1', fn:'UV Absorber, UV Filter', annex:'VI', max:'10% (as acid)' },
+  { inci:'DROMETRIZOLE TRISILOXANE', cas:'155633-54-8', ec:'429-080-7', fn:'UV Absorber, UV Filter', annex:'VI', max:'15%' },
+  { inci:'METHYLENE BIS-BENZOTRIAZOLYL TETRAMETHYLBUTYLPHENOL', cas:'103597-45-1', ec:'403-800-1', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'BIS-ETHYLHEXYLOXYPHENOL METHOXYPHENYL TRIAZINE', cas:'187393-00-6', ec:'424-990-7', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'DIETHYLAMINO HYDROXYBENZOYL HEXYL BENZOATE', cas:'302776-68-7', ec:'441-170-7', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'ISOAMYL P-METHOXYCINNAMATE', cas:'71617-10-2', ec:'275-702-5', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'TRIETHANOLAMINE SALICYLATE', cas:'2174-16-5', ec:'218-531-3', fn:'UV Absorber, UV Filter', annex:'VI', max:'12%' },
+  { inci:'DIISOPROPYL CINNAMIC ACID', cas:'6386-71-6', ec:'229-006-8', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'ISCOTRIZINOL', cas:'137658-79-8', ec:'422-380-4', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  { inci:'TRIS-BIPHENYL TRIAZINE', cas:'31274-51-8', ec:'250-537-5', fn:'UV Absorber, UV Filter', annex:'VI', max:'10%' },
+  // --- Annex V: Preservatives ---
+  { inci:'PHENOXYETHANOL', cas:'122-99-6', ec:'204-589-7', fn:'Preservative, Solvent', annex:'V', max:'1%' },
+  { inci:'METHYLPARABEN', cas:'99-76-3', ec:'202-785-7', fn:'Preservative', annex:'V', max:'0.4% (single) / 0.8% (mixture)' },
+  { inci:'ETHYLPARABEN', cas:'120-47-8', ec:'204-399-4', fn:'Preservative', annex:'V', max:'0.4% (single)' },
+  { inci:'PROPYLPARABEN', cas:'94-13-3', ec:'202-307-7', fn:'Preservative', annex:'V', max:'0.14%' },
+  { inci:'BUTYLPARABEN', cas:'94-26-8', ec:'202-318-7', fn:'Preservative', annex:'V', max:'0.14%' },
+  { inci:'BENZYL ALCOHOL', cas:'100-51-6', ec:'202-859-9', fn:'Masking, Preservative, Solvent, Viscosity Controlling', annex:'V', max:'1%' },
+  { inci:'SODIUM BENZOATE', cas:'532-32-1', ec:'208-534-8', fn:'Preservative', annex:'V', max:'0.5%' },
+  { inci:'BENZOIC ACID', cas:'65-85-0', ec:'200-618-2', fn:'Preservative', annex:'V', max:'0.5%' },
+  { inci:'SORBIC ACID', cas:'110-44-1', ec:'203-768-7', fn:'Preservative', annex:'V', max:'0.6%' },
+  { inci:'POTASSIUM SORBATE', cas:'24634-61-5', ec:'246-376-1', fn:'Preservative', annex:'V', max:'0.6% (as sorbic acid)' },
+  { inci:'DEHYDROACETIC ACID', cas:'520-45-6', ec:'208-293-9', fn:'Preservative', annex:'V', max:'0.6% (as acid)' },
+  { inci:'CHLORPHENESIN', cas:'104-29-0', ec:'203-192-7', fn:'Preservative', annex:'V', max:'0.3%' },
+  { inci:'DMDM HYDANTOIN', cas:'6440-58-0', ec:'229-222-8', fn:'Preservative', annex:'V', max:'0.6%' },
+  { inci:'IMIDAZOLIDINYL UREA', cas:'39236-46-9', ec:'254-372-6', fn:'Preservative', annex:'V', max:'0.6%' },
+  { inci:'DIAZOLIDINYL UREA', cas:'78491-02-8', ec:'278-928-2', fn:'Preservative', annex:'V', max:'0.5%' },
+  { inci:'CHLOROXYLENOL', cas:'88-04-0', ec:'201-793-8', fn:'Preservative', annex:'V', max:'0.5%' },
+  { inci:'CAPRYLYL GLYCOL', cas:'1117-86-8', ec:'214-254-7', fn:'Emollient, Humectant, Preservative', annex:'V', max:'—' },
+  { inci:'ETHYLHEXYLGLYCERIN', cas:'70445-33-9', ec:'274-681-6', fn:'Deodorant, Preservative, Skin Conditioning', annex:'V', max:'—' },
+  { inci:'POLYAMINOPROPYL BIGUANIDE', cas:'28757-47-3', ec:'—', fn:'Antimicrobial, Preservative', annex:'V', max:'0.3%' },
+  { inci:'SODIUM HYDROXYMETHYLGLYCINATE', cas:'70161-44-3', ec:'274-357-8', fn:'Preservative', annex:'V', max:'0.5%' },
+  { inci:'FORMALDEHYDE', cas:'50-00-0', ec:'200-001-8', fn:'Preservative', annex:'V', max:'0.2% (0.1% oral hygiene)' },
+  // --- Annex III: Restricted Substances ---
+  { inci:'SALICYLIC ACID', cas:'69-72-7', ec:'200-712-3', fn:'Exfoliant, Keratolytic, Preservative', annex:'III', max:'2% (face/body) / 3% (hair rinse)' },
+  { inci:'HYDROQUINONE', cas:'123-31-9', ec:'204-617-8', fn:'Hair Dyeing, Skin Conditioning', annex:'III', max:'0.3% (oxidative hair dye only; prohibited for skin lightening)' },
+  { inci:'RESORCINOL', cas:'108-46-3', ec:'203-585-2', fn:'Hair Dyeing, Skin Conditioning', annex:'III', max:'0.5% (hair dye only)' },
+  { inci:'TRICLOSAN', cas:'3380-34-5', ec:'222-182-2', fn:'Deodorant, Preservative', annex:'III', max:'0.3% (toothpaste/face wash/deodorant only)' },
+  { inci:'KOJIC ACID', cas:'501-30-4', ec:'207-922-4', fn:'Skin Conditioning, Skin Lightening', annex:'III', max:'1% (face/hand care)' },
+  { inci:'ALPHA-ISOMETHYL IONONE', cas:'127-51-5', ec:'204-846-3', fn:'Fragrance, Masking', annex:'III', max:'Labeling required >0.001% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'COLOPHONIUM', cas:'8050-09-7', ec:'232-475-7', fn:'Binding, Film Forming', annex:'III', max:'Labeling required (allergen)' },
+  // --- Active Ingredients (no specific Annex restriction) ---
+  { inci:'RETINOL', cas:'68-26-8', ec:'200-683-7', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'0.3% face / 0.05% body (SCCS rec.)' },
+  { inci:'RETINYL PALMITATE', cas:'79-81-2', ec:'201-228-5', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'RETINYL ACETATE', cas:'127-47-9', ec:'204-844-2', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'NIACINAMIDE', cas:'98-92-0', ec:'202-713-4', fn:'Skin Conditioning, Smoothing', annex:'—', max:'—' },
+  { inci:'ASCORBIC ACID', cas:'50-81-7', ec:'200-066-2', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'ASCORBYL GLUCOSIDE', cas:'129499-78-1', ec:'—', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'SODIUM ASCORBYL PHOSPHATE', cas:'66170-10-3', ec:'266-149-9', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'ASCORBYL TETRAISOPALMITATE', cas:'183476-82-6', ec:'—', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'TOCOPHEROL', cas:'59-02-9', ec:'200-412-2', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'TOCOPHERYL ACETATE', cas:'58-95-7', ec:'200-405-4', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'HYALURONIC ACID', cas:'9004-61-9', ec:'—', fn:'Film Forming, Humectant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'SODIUM HYALURONATE', cas:'9067-32-7', ec:'—', fn:'Humectant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'GLYCOLIC ACID', cas:'79-14-1', ec:'201-180-5', fn:'Exfoliant, Humectant, Keratolytic', annex:'—', max:'10% pH≥3.5 (consumer)' },
+  { inci:'LACTIC ACID', cas:'79-33-4', ec:'201-196-2', fn:'Buffering, Exfoliant, Humectant, Keratolytic', annex:'—', max:'10% pH≥3.5 (consumer)' },
+  { inci:'MANDELIC ACID', cas:'90-64-2', ec:'202-007-0', fn:'Exfoliant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'AZELAIC ACID', cas:'123-99-9', ec:'204-669-1', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'TRANEXAMIC ACID', cas:'1197-18-8', ec:'214-818-2', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'ADENOSINE', cas:'58-61-7', ec:'200-386-2', fn:'Skin Conditioning, Smoothing', annex:'—', max:'—' },
+  { inci:'ALPHA-ARBUTIN', cas:'84380-01-8', ec:'282-602-2', fn:'Skin Conditioning', annex:'—', max:'2% face / 0.5% body (SCCS rec.)' },
+  { inci:'ARBUTIN', cas:'497-76-7', ec:'207-850-3', fn:'Skin Conditioning', annex:'—', max:'7% face (SCCS rec.)' },
+  { inci:'PANTHENOL', cas:'81-13-0', ec:'201-327-3', fn:'Antistatic, Emollient, Hair Conditioning, Humectant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'ALLANTOIN', cas:'97-59-6', ec:'202-592-8', fn:'Skin Conditioning, Soothing', annex:'—', max:'—' },
+  { inci:'CAFFEINE', cas:'58-08-2', ec:'200-362-1', fn:'Masking, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'RESVERATROL', cas:'501-36-0', ec:'207-929-1', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'BAKUCHIOL', cas:'10309-37-2', ec:'233-749-0', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'GLUTATHIONE', cas:'70-18-8', ec:'200-725-4', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'CERAMIDE NP', cas:'74713-59-0', ec:'—', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'COLLAGEN', cas:'9007-34-5', ec:'—', fn:'Film Forming, Hair Conditioning, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'BIOTIN', cas:'58-85-5', ec:'200-399-3', fn:'Hair Conditioning, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'BISABOLOL', cas:'515-69-5', ec:'208-205-9', fn:'Anti-Inflammatory, Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'CENTELLA ASIATICA EXTRACT', cas:'84696-21-9', ec:'283-641-2', fn:'Skin Conditioning, Soothing', annex:'—', max:'—' },
+  { inci:'MADECASSOSIDE', cas:'34540-22-2', ec:'—', fn:'Skin Conditioning, Soothing', annex:'—', max:'—' },
+  { inci:'ASIATICOSIDE', cas:'16830-15-2', ec:'—', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'COPPER GLUCONATE', cas:'527-09-3', ec:'208-408-2', fn:'Skin Conditioning', annex:'—', max:'—' },
+  // --- Fragrance Allergens (Annex III — labeling required) ---
+  { inci:'LIMONENE', cas:'5989-27-5', ec:'202-341-9', fn:'Fragrance, Masking, Solvent', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'LINALOOL', cas:'78-70-6', ec:'201-134-4', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'CITRONELLOL', cas:'106-22-9', ec:'203-375-0', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'GERANIOL', cas:'106-24-1', ec:'203-377-1', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'CINNAMAL', cas:'104-55-2', ec:'203-213-9', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'EUGENOL', cas:'97-53-0', ec:'202-589-1', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'ISOEUGENOL', cas:'97-54-1', ec:'202-590-7', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'CINNAMYL ALCOHOL', cas:'104-54-1', ec:'203-212-3', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'COUMARIN', cas:'91-64-5', ec:'202-086-7', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'FARNESOL', cas:'4602-84-0', ec:'225-004-1', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'HYDROXYCITRONELLAL', cas:'107-75-5', ec:'203-518-0', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'BENZYL BENZOATE', cas:'120-51-4', ec:'204-402-9', fn:'Fragrance, Masking, Solvent', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'BENZYL CINNAMATE', cas:'103-41-3', ec:'203-109-3', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'BENZYL SALICYLATE', cas:'118-58-1', ec:'204-262-9', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'AMYL CINNAMAL', cas:'122-40-7', ec:'204-541-5', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'HEXYL CINNAMAL', cas:'101-86-0', ec:'202-983-3', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'AMYLCINNAMYL ALCOHOL', cas:'101-85-9', ec:'202-982-8', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'METHYL 2-OCTYNOATE', cas:'111-12-6', ec:'203-836-6', fn:'Fragrance, Masking', annex:'III', max:'Label >0.01% (rinse-off) / >0.001% (leave-on)' },
+  { inci:'EVERNIA PRUNASTRI EXTRACT', cas:'90028-68-5', ec:'289-861-3', fn:'Fragrance', annex:'III', max:'Max 0.1% (SCCS rec.)' },
+  { inci:'EVERNIA FURFURACEA EXTRACT', cas:'90028-67-4', ec:'289-860-8', fn:'Fragrance', annex:'III', max:'Max 0.1% (SCCS rec.)' },
+  // --- Annex II: Prohibited Substances ---
+  { inci:'BUTYLPHENYL METHYLPROPIONAL', cas:'80-54-6', ec:'201-289-8', fn:'Fragrance, Masking', annex:'II', max:'PROHIBITED (banned March 2022)' },
+  { inci:'HYDROXYISOHEXYL 3-CYCLOHEXENE CARBOXALDEHYDE', cas:'31906-04-4', ec:'250-863-4', fn:'Fragrance, Masking', annex:'II', max:'PROHIBITED' },
+  { inci:'RETINOIC ACID', cas:'302-79-4', ec:'206-129-0', fn:'Skin Conditioning', annex:'II', max:'PROHIBITED in cosmetics' },
+  { inci:'ARBUTIN (skin lightening >2%)', cas:'497-76-7', ec:'207-850-3', fn:'Skin Conditioning', annex:'II', max:'Prohibited >2% (skin lightening claim)' },
+  // --- Silicones ---
+  { inci:'DIMETHICONE', cas:'9006-65-9', ec:'—', fn:'Antifoaming, Emollient, Skin Conditioning, Skin Protecting', annex:'—', max:'—' },
+  { inci:'CYCLOPENTASILOXANE', cas:'541-02-6', ec:'208-764-9', fn:'Emollient, Solvent', annex:'—', max:'≤0.1% in rinse-off (restricted from 2022)' },
+  { inci:'CYCLOTETRASILOXANE', cas:'556-67-2', ec:'209-136-7', fn:'Emollient, Solvent', annex:'—', max:'≤0.1% in rinse-off (restricted from 2022)' },
+  { inci:'DIMETHICONOL', cas:'70131-67-8', ec:'—', fn:'Emollient, Film Forming, Hair Conditioning', annex:'—', max:'—' },
+  { inci:'PHENYL TRIMETHICONE', cas:'2116-84-9', ec:'218-320-6', fn:'Hair Conditioning, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'AMODIMETHICONE', cas:'71750-79-3', ec:'—', fn:'Antistatic, Hair Conditioning', annex:'—', max:'—' },
+  { inci:'CYCLOTETRAMETHYLTETRASILOXANE', cas:'2370-88-9', ec:'—', fn:'Emollient, Solvent', annex:'—', max:'—' },
+  // --- Humectants & Solvents ---
+  { inci:'GLYCERIN', cas:'56-81-5', ec:'200-289-5', fn:'Humectant, Skin Conditioning, Solvent', annex:'—', max:'—' },
+  { inci:'PROPYLENE GLYCOL', cas:'57-55-6', ec:'200-338-0', fn:'Humectant, Skin Conditioning, Solvent', annex:'—', max:'—' },
+  { inci:'BUTYLENE GLYCOL', cas:'107-88-0', ec:'203-529-7', fn:'Humectant, Skin Conditioning, Solvent', annex:'—', max:'—' },
+  { inci:'PENTYLENE GLYCOL', cas:'5765-44-6', ec:'227-353-9', fn:'Humectant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'HEXYLENE GLYCOL', cas:'107-41-5', ec:'203-489-0', fn:'Emollient, Humectant, Solvent', annex:'—', max:'—' },
+  { inci:'SORBITOL', cas:'50-70-4', ec:'200-061-5', fn:'Humectant, Oral Care, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'UREA', cas:'57-13-6', ec:'200-315-5', fn:'Humectant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'BETAINE', cas:'107-43-7', ec:'203-490-6', fn:'Antistatic, Humectant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'TREHALOSE', cas:'99-20-7', ec:'202-739-6', fn:'Humectant, Skin Conditioning', annex:'—', max:'—' },
+  // --- Fatty Alcohols ---
+  { inci:'CETYL ALCOHOL', cas:'36653-82-4', ec:'253-149-0', fn:'Emollient, Emulsifying, Opacifying, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'STEARYL ALCOHOL', cas:'112-92-5', ec:'204-017-6', fn:'Emollient, Emulsifying, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'CETEARYL ALCOHOL', cas:'67762-27-0', ec:'267-008-6', fn:'Emollient, Emulsifying, Opacifying, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'BEHENYL ALCOHOL', cas:'661-19-8', ec:'211-546-6', fn:'Emollient, Emulsifying, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'MYRISTYL ALCOHOL', cas:'112-72-1', ec:'204-000-3', fn:'Emollient, Emulsifying, Opacifying', annex:'—', max:'—' },
+  // --- Fatty Acids ---
+  { inci:'STEARIC ACID', cas:'57-11-4', ec:'200-313-4', fn:'Cleansing, Emulsifying, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'PALMITIC ACID', cas:'57-10-3', ec:'200-312-9', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'LAURIC ACID', cas:'143-07-7', ec:'205-582-1', fn:'Cleansing, Emulsifying', annex:'—', max:'—' },
+  { inci:'MYRISTIC ACID', cas:'544-63-8', ec:'208-875-2', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'OLEIC ACID', cas:'112-80-1', ec:'204-007-1', fn:'Emollient, Emulsifying, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'LINOLEIC ACID', cas:'60-33-3', ec:'200-470-9', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  // --- Emollients & Esters ---
+  { inci:'CAPRYLIC/CAPRIC TRIGLYCERIDE', cas:'65381-09-1', ec:'265-724-3', fn:'Emollient, Skin Conditioning, Solvent', annex:'—', max:'—' },
+  { inci:'ISOPROPYL MYRISTATE', cas:'110-27-0', ec:'203-751-4', fn:'Emollient, Skin Conditioning, Solvent', annex:'—', max:'—' },
+  { inci:'ISOPROPYL PALMITATE', cas:'142-91-6', ec:'205-571-1', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'ETHYLHEXYL PALMITATE', cas:'29806-73-3', ec:'249-862-1', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'ETHYLHEXYL STEARATE', cas:'22047-49-0', ec:'244-754-0', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'C12-15 ALKYL BENZOATE', cas:'68411-27-8', ec:'270-119-7', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'SQUALANE', cas:'111-01-3', ec:'203-825-6', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'ISONONYL ISONONANOATE', cas:'42131-25-9', ec:'255-655-4', fn:'Emollient', annex:'—', max:'—' },
+  { inci:'NEOPENTYL GLYCOL DIHEPTANOATE', cas:'93803-87-3', ec:'—', fn:'Emollient', annex:'—', max:'—' },
+  // --- Emulsifiers ---
+  { inci:'POLYSORBATE-20', cas:'9005-64-5', ec:'—', fn:'Emulsifying, Surfactant', annex:'—', max:'—' },
+  { inci:'POLYSORBATE-60', cas:'9005-67-8', ec:'—', fn:'Emulsifying', annex:'—', max:'—' },
+  { inci:'POLYSORBATE-80', cas:'9005-65-6', ec:'—', fn:'Emulsifying, Surfactant', annex:'—', max:'—' },
+  { inci:'GLYCERYL STEARATE', cas:'31566-31-1', ec:'250-705-4', fn:'Emollient, Emulsifying, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'SORBITAN STEARATE', cas:'1338-41-6', ec:'215-664-9', fn:'Emulsifying, Surfactant', annex:'—', max:'—' },
+  { inci:'SORBITAN OLEATE', cas:'1338-43-8', ec:'215-665-4', fn:'Emulsifying, Surfactant', annex:'—', max:'—' },
+  { inci:'LECITHIN', cas:'8002-43-5', ec:'232-307-2', fn:'Antioxidant, Emollient, Emulsifying, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'PEG-100 STEARATE', cas:'9004-99-3', ec:'—', fn:'Emulsifying, Surfactant', annex:'—', max:'—' },
+  { inci:'CETEARETH-20', cas:'68439-49-6', ec:'—', fn:'Emulsifying, Surfactant', annex:'—', max:'—' },
+  // --- Surfactants & Cleansers ---
+  { inci:'SODIUM LAURYL SULFATE', cas:'151-21-3', ec:'205-788-1', fn:'Cleansing, Denaturant, Emulsifying, Surfactant', annex:'—', max:'—' },
+  { inci:'SODIUM LAURETH SULFATE', cas:'9004-82-4', ec:'—', fn:'Cleansing, Emulsifying, Surfactant', annex:'—', max:'—' },
+  { inci:'COCAMIDOPROPYL BETAINE', cas:'61789-40-0', ec:'263-058-8', fn:'Antistatic, Cleansing, Surfactant, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'DECYL GLUCOSIDE', cas:'54549-25-6', ec:'259-218-1', fn:'Cleansing, Surfactant', annex:'—', max:'—' },
+  { inci:'LAURYL GLUCOSIDE', cas:'110615-47-9', ec:'—', fn:'Cleansing, Surfactant', annex:'—', max:'—' },
+  { inci:'SODIUM COCOYL GLUTAMATE', cas:'68187-32-6', ec:'269-087-2', fn:'Cleansing, Emulsifying, Surfactant', annex:'—', max:'—' },
+  { inci:'SODIUM LAUROYL SARCOSINATE', cas:'137-16-6', ec:'205-281-5', fn:'Antistatic, Cleansing, Surfactant', annex:'—', max:'—' },
+  { inci:'DISODIUM LAURETH SULFOSUCCINATE', cas:'39354-45-5', ec:'254-444-3', fn:'Cleansing, Surfactant', annex:'—', max:'—' },
+  { inci:'COCAMIDE DEA', cas:'68603-42-9', ec:'271-657-0', fn:'Cleansing, Surfactant, Viscosity Controlling', annex:'—', max:'—' },
+  // --- Thickeners & Polymers ---
+  { inci:'CARBOMER', cas:'9003-01-4', ec:'—', fn:'Emulsion Stabilizing, Gel Forming, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'XANTHAN GUM', cas:'11138-66-2', ec:'234-394-2', fn:'Emulsion Stabilizing, Surfactant, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'HYDROXYETHYLCELLULOSE', cas:'9004-62-0', ec:'—', fn:'Emulsion Stabilizing, Film Forming, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'HYDROXYPROPYL METHYLCELLULOSE', cas:'9004-65-3', ec:'—', fn:'Film Forming, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'SODIUM CARBOXYMETHYL CELLULOSE', cas:'9004-32-4', ec:'—', fn:'Emulsion Stabilizing, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'ACRYLATES/C10-30 ALKYL ACRYLATE CROSSPOLYMER', cas:'9062-04-8', ec:'—', fn:'Emulsion Stabilizing, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'POLYACRYLATE CROSSPOLYMER-6', cas:'—', ec:'—', fn:'Emulsion Stabilizing, Gel Forming, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'CARBOXY VINYL POLYMER', cas:'76050-42-5', ec:'—', fn:'Emulsion Stabilizing, Viscosity Controlling', annex:'—', max:'—' },
+  // --- Natural Oils & Butters ---
+  { inci:'SIMMONDSIA CHINENSIS SEED OIL', cas:'61789-91-1', ec:'263-148-7', fn:'Emollient, Hair Conditioning, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'ARGANIA SPINOSA KERNEL OIL', cas:'223747-87-3', ec:'—', fn:'Emollient, Hair Conditioning, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'HELIANTHUS ANNUUS SEED OIL', cas:'8001-21-6', ec:'232-273-9', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'COCOS NUCIFERA OIL', cas:'8001-31-8', ec:'232-282-8', fn:'Emollient, Hair Conditioning, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'BUTYROSPERMUM PARKII BUTTER', cas:'194043-92-0', ec:'—', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'PRUNUS AMYGDALUS DULCIS OIL', cas:'8007-69-4', ec:'—', fn:'Emollient, Hair Conditioning, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'VITIS VINIFERA SEED OIL', cas:'85594-37-2', ec:'287-896-9', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'ROSA CANINA FRUIT OIL', cas:'83709-60-8', ec:'280-764-5', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'MACADAMIA INTEGRIFOLIA SEED OIL', cas:'128497-20-1', ec:'—', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'PERSEA GRATISSIMA OIL', cas:'8024-32-6', ec:'—', fn:'Emollient, Skin Conditioning', annex:'—', max:'—' },
+  // --- Hair Care Ingredients ---
+  { inci:'BEHENTRIMONIUM CHLORIDE', cas:'17301-53-0', ec:'241-327-0', fn:'Antistatic, Hair Conditioning', annex:'—', max:'—' },
+  { inci:'CETRIMONIUM CHLORIDE', cas:'112-02-7', ec:'203-928-6', fn:'Antistatic, Hair Conditioning, Preservative', annex:'—', max:'—' },
+  { inci:'STEARAMIDOPROPYL DIMETHYLAMINE', cas:'7651-02-7', ec:'231-609-1', fn:'Antistatic, Hair Conditioning', annex:'—', max:'—' },
+  { inci:'POLYQUATERNIUM-10', cas:'53568-66-4', ec:'—', fn:'Antistatic, Film Forming, Hair Conditioning', annex:'—', max:'—' },
+  { inci:'POLYQUATERNIUM-7', cas:'26590-05-6', ec:'247-767-9', fn:'Antistatic, Film Forming, Hair Conditioning', annex:'—', max:'—' },
+  { inci:'HYDROLYZED KERATIN', cas:'69430-36-0', ec:'—', fn:'Antistatic, Film Forming, Hair Conditioning, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'HYDROLYZED WHEAT PROTEIN', cas:'70084-87-6', ec:'—', fn:'Hair Conditioning, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'HYDROLYZED COLLAGEN', cas:'9015-54-7', ec:'—', fn:'Antistatic, Film Forming, Hair Conditioning, Skin Conditioning', annex:'—', max:'—' },
+  // --- Minerals & Inorganic Pigments ---
+  { inci:'KAOLIN', cas:'1332-58-7', ec:'296-473-8', fn:'Absorbent, Bulking, Opacifying, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'TALC', cas:'14807-96-6', ec:'238-877-9', fn:'Absorbent, Anticaking, Bulking, Opacifying, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'SILICA', cas:'7631-86-9', ec:'231-545-4', fn:'Absorbent, Anticaking, Bulking, Opacifying, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'MICA', cas:'12001-26-2', ec:'310-127-6', fn:'Bulking, Colorant, Opacifying', annex:'—', max:'—' },
+  // --- Colorants (Annex IV) ---
+  { inci:'CI 77266 (CARBON BLACK)', cas:'1333-86-4', ec:'215-609-9', fn:'Colorant', annex:'IV', max:'Annex IV permitted' },
+  { inci:'CI 77491/77492/77499 (IRON OXIDES)', cas:'1317-61-9', ec:'215-277-5', fn:'Colorant', annex:'IV', max:'Annex IV permitted' },
+  { inci:'CI 77007 (ULTRAMARINES)', cas:'57455-37-5', ec:'—', fn:'Colorant', annex:'IV', max:'Annex IV permitted' },
+  { inci:'CI 19140 (YELLOW 5)', cas:'1934-21-0', ec:'217-699-5', fn:'Colorant', annex:'IV', max:'Annex IV permitted' },
+  { inci:'CI 15985 (YELLOW 6)', cas:'2783-94-0', ec:'220-491-7', fn:'Colorant', annex:'IV', max:'Annex IV permitted' },
+  { inci:'CI 42090 (BLUE 1)', cas:'3844-45-9', ec:'223-339-8', fn:'Colorant', annex:'IV', max:'Annex IV permitted' },
+  { inci:'CI 16035 (RED 40)', cas:'25956-17-6', ec:'247-368-0', fn:'Colorant', annex:'IV', max:'Annex IV permitted' },
+  { inci:'CI 45430 (RED 3)', cas:'16423-68-0', ec:'240-474-8', fn:'Colorant', annex:'IV', max:'Annex IV permitted' },
+  { inci:'CI 77742 (MANGANESE VIOLET)', cas:'10101-66-3', ec:'233-257-4', fn:'Colorant', annex:'IV', max:'Annex IV permitted' },
+  { inci:'CI 77000 (ALUMINUM)', cas:'7429-90-5', ec:'231-072-3', fn:'Colorant, Opacifying', annex:'IV', max:'Annex IV permitted' },
+  // --- Peptides & Bioactives ---
+  { inci:'ACETYL HEXAPEPTIDE-3', cas:'616204-22-9', ec:'—', fn:'Skin Conditioning, Smoothing', annex:'—', max:'—' },
+  { inci:'PALMITOYL PENTAPEPTIDE-4', cas:'214047-00-4', ec:'—', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'PALMITOYL TRIPEPTIDE-1', cas:'147732-56-7', ec:'—', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'COPPER TRIPEPTIDE-1', cas:'49557-75-7', ec:'—', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'DIPEPTIDE DIAMINOBUTYROYL BENZYLAMIDE DIACETATE', cas:'823202-99-9', ec:'—', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'SH-OLIGOPEPTIDE-1', cas:'62253-63-8', ec:'—', fn:'Skin Conditioning', annex:'—', max:'—' },
+  { inci:'FERULIC ACID', cas:'1135-24-6', ec:'214-490-0', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'COENZYME Q10', cas:'303-98-0', ec:'206-147-9', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'EPIGALLOCATECHIN GALLATE', cas:'989-51-5', ec:'213-627-1', fn:'Antioxidant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'GALACTOMYCES FERMENT FILTRATE', cas:'—', ec:'—', fn:'Humectant, Skin Conditioning', annex:'—', max:'—' },
+  { inci:'LACTOBACILLUS FERMENT', cas:'—', ec:'—', fn:'Skin Conditioning, Skin Protecting', annex:'—', max:'—' },
+  { inci:'NONI EXTRACT', cas:'—', ec:'—', fn:'Skin Conditioning, Antioxidant', annex:'—', max:'—' },
+  // --- Common Base Ingredients ---
+  { inci:'WATER', cas:'7732-18-5', ec:'231-791-2', fn:'Solvent', annex:'—', max:'—' },
+  { inci:'ALCOHOL DENAT.', cas:'64-17-5', ec:'200-578-6', fn:'Antifoaming, Antimicrobial, Astringent, Solvent', annex:'—', max:'—' },
+  { inci:'ETHANOL', cas:'64-17-5', ec:'200-578-6', fn:'Antifoaming, Antimicrobial, Astringent, Solvent', annex:'—', max:'—' },
+  { inci:'SODIUM CHLORIDE', cas:'7647-14-5', ec:'231-598-3', fn:'Bulking, Oral Care, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'SODIUM HYDROXIDE', cas:'1310-73-2', ec:'215-185-5', fn:'Buffering, Denaturant, pH Adjuster', annex:'—', max:'—' },
+  { inci:'CITRIC ACID', cas:'77-92-9', ec:'201-069-1', fn:'Buffering, Chelating, pH Adjuster', annex:'—', max:'—' },
+  { inci:'DISODIUM EDTA', cas:'139-33-3', ec:'205-358-3', fn:'Chelating, Viscosity Controlling', annex:'—', max:'—' },
+  { inci:'TITANIUM DIOXIDE (CI 77891)', cas:'13463-67-7', ec:'236-675-5', fn:'Colorant, Opacifying, UV Filter', annex:'IV/VI', max:'25% (UV), Annex IV (colorant)' },
+];
+
+const COSING_ANNEX_COLOR = {
+  'VI':    '#059669;background:#d1fae5',
+  'V':     '#1a56db;background:#e8effe',
+  'IV':    '#7c3aed;background:#ede9fe',
+  'IV/VI': '#0284c7;background:#e0f2fe',
+  'III':   '#d97706;background:#fef3c7',
+  'II':    '#dc2626;background:#fee2e2',
+  '—':     '#6b7280;background:#f3f4f6',
+};
+
+const COSING_ANNEX_LABEL = {
+  'VI':'Annex VI (UV Filter)', 'V':'Annex V (Preservative)',
+  'IV':'Annex IV (Colorant)', 'IV/VI':'Annex IV+VI',
+  'III':'Annex III (Restricted)', 'II':'Annex II (PROHIBITED)', '—':'—',
+};
+
 let cosingTimer = null;
 function scheduleCosingSearch(q) {
   clearTimeout(cosingTimer);
-  if (q.length < 2) {
-    document.getElementById('cosingResults').innerHTML = '';
-    document.getElementById('cosingStatus').textContent = '';
-    return;
-  }
-  document.getElementById('cosingStatus').innerHTML = '<span style="color:var(--primary)">Đang tra cứu CosIng EU...</span>';
-  cosingTimer = setTimeout(() => doCosingSearch(q), 600);
-}
-
-async function doCosingSearch(q) {
   const statusEl = document.getElementById('cosingStatus');
   const resultsEl = document.getElementById('cosingResults');
-  try {
-    const res = await api(`/api/cosing/search?q=${encodeURIComponent(q)}`);
-
-    if (res.error && res.results.length === 0) {
-      statusEl.textContent = '';
-      resultsEl.innerHTML = `
-        <div class="card" style="text-align:center;padding:32px">
-          <div class="fs-13 text-danger" style="margin-bottom:12px">${res.error}</div>
-          <a href="${res.search_url}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">
-            Mở CosIng trực tiếp &rarr;
-          </a>
-        </div>`;
-      return;
-    }
-
-    statusEl.textContent = res.results.length > 0 ? `Tìm thấy ${res.results.length} thành phần` : '';
-    if (res.results.length === 0) {
-      resultsEl.innerHTML = `
-        <div class="card" style="text-align:center;padding:32px">
-          <div class="fs-13 text-gray" style="margin-bottom:12px">Không tìm thấy thành phần phù hợp với "<strong>${q}</strong>"</div>
-          <a href="${res.search_url}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Tìm trên CosIng &rarr;</a>
-        </div>`;
-      return;
-    }
-
-    let html = `<div class="card" style="overflow-x:auto">
-      <div class="flex justify-between items-center mb-16">
-        <span class="fw-600 fs-13">Kết quả từ CosIng EU (${res.results.length})</span>
-        <a href="${res.search_url}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Xem trên CosIng &rarr;</a>
-      </div>
-      <table>
-        <thead><tr>
-          <th>INCI Name</th><th>CAS No.</th><th>EC No.</th><th>Functions</th><th>Restrictions</th><th></th>
-        </tr></thead>
-        <tbody>`;
-
-    res.results.forEach(r => {
-      const detailUrl = r.id
-        ? `https://ec.europa.eu/growth/tools-databases/cosing/details/${r.id}`
-        : res.search_url;
-      const fnBadges = r.functions
-        ? r.functions.split(/[,;]/).map(f => f.trim()).filter(Boolean)
-            .map(f => `<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;background:var(--primary-light);color:var(--primary);margin:1px">${f}</span>`).join(' ')
-        : '—';
-      html += `<tr>
-        <td class="fw-600">${r.inci_name}</td>
-        <td class="fs-12 text-gray">${r.cas_no || '—'}</td>
-        <td class="fs-12 text-gray">${r.ec_no || '—'}</td>
-        <td>${fnBadges}</td>
-        <td class="fs-12">${r.restrictions || '—'}</td>
-        <td><a href="${detailUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Chi tiết</a></td>
-      </tr>`;
-    });
-
-    html += '</tbody></table></div>';
-    resultsEl.innerHTML = html;
-  } catch (err) {
+  if (q.length < 2) {
+    resultsEl.innerHTML = '';
     statusEl.textContent = '';
-    resultsEl.innerHTML = `<div class="card" style="text-align:center;padding:32px;color:var(--danger)">Lỗi kết nối: ${err.message}</div>`;
+    return;
   }
+  cosingTimer = setTimeout(() => doCosingSearch(q), 300);
+}
+
+function doCosingSearch(q) {
+  const statusEl = document.getElementById('cosingStatus');
+  const resultsEl = document.getElementById('cosingResults');
+  const term = q.toLowerCase().trim();
+  const results = COSING_DB.filter(r =>
+    r.inci.toLowerCase().includes(term) || r.cas.includes(term)
+  );
+  const verifyUrl = `https://ec.europa.eu/growth/tools-databases/cosing/index.cfm?fuseaction=search.results&search_term=${encodeURIComponent(q)}&search_wtype=INCI`;
+
+  if (results.length === 0) {
+    statusEl.textContent = '';
+    resultsEl.innerHTML = `
+      <div class="card" style="text-align:center;padding:32px">
+        <div class="fs-13 text-gray" style="margin-bottom:12px">Không có trong offline cache với "<strong>${q}</strong>"</div>
+        <a href="${verifyUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Tìm trực tiếp trên CosIng EU &rarr;</a>
+      </div>`;
+    return;
+  }
+
+  statusEl.innerHTML = `<span style="color:var(--success)">Tìm thấy ${results.length} thành phần</span>
+    <span class="text-gray" style="margin-left:12px">· Nguồn: CosIng EU offline cache ·
+      <a href="${verifyUrl}" target="_blank" rel="noopener" style="color:var(--primary)">Xác minh trên CosIng &rarr;</a>
+    </span>`;
+
+  let html = `<div class="card" style="overflow-x:auto"><table>
+    <thead><tr>
+      <th>INCI Name</th><th>CAS No.</th><th>EC No.</th><th>Functions</th><th>EU Annex</th><th>Nồng độ tối đa</th><th></th>
+    </tr></thead><tbody>`;
+
+  results.forEach(r => {
+    const ac = COSING_ANNEX_COLOR[r.annex] || COSING_ANNEX_COLOR['—'];
+    const al = COSING_ANNEX_LABEL[r.annex] || r.annex;
+    const fnBadges = r.fn.split(',').map(f => f.trim()).filter(Boolean)
+      .map(f => `<span style="display:inline-block;padding:2px 7px;border-radius:9px;font-size:11px;background:var(--primary-light);color:var(--primary);margin:1px;white-space:nowrap">${f}</span>`).join(' ');
+    const cosUrl = `https://ec.europa.eu/growth/tools-databases/cosing/index.cfm?fuseaction=search.results&search_term=${encodeURIComponent(r.inci)}&search_wtype=INCI`;
+    html += `<tr>
+      <td class="fw-600" style="white-space:nowrap">${r.inci}</td>
+      <td class="fs-12 text-gray" style="white-space:nowrap">${r.cas}</td>
+      <td class="fs-12 text-gray" style="white-space:nowrap">${r.ec}</td>
+      <td>${fnBadges}</td>
+      <td><span class="badge" style="color:${ac};white-space:nowrap">${al}</span></td>
+      <td class="fs-12 fw-600" style="white-space:nowrap">${r.max}</td>
+      <td><a href="${cosUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">CosIng &rarr;</a></td>
+    </tr>`;
+  });
+
+  html += '</tbody></table></div>';
+  resultsEl.innerHTML = html;
 }
 
 // ============================================================
