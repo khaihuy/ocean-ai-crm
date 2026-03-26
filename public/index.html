@@ -967,7 +967,7 @@ function cosingCard(r, idx) {
             <tr><td style="color:var(--gray);padding:4px 0;width:130px">INCI Name</td><td class="fw-600">${r.inci_name}</td></tr>
             <tr><td style="color:var(--gray);padding:4px 0">CAS Number</td><td>${r.cas_no || '—'}</td></tr>
             <tr><td style="color:var(--gray);padding:4px 0">EC Number</td><td>${r.ec_no || '—'}</td></tr>
-            <tr><td style="color:var(--gray);padding:4px 0">Nguồn gốc</td><td>${r.origin || '—'}</td></tr>
+            ${r.origin ? `<tr><td style="color:var(--gray);padding:4px 0">Nguồn gốc</td><td>${r.origin}</td></tr>` : ''}
             ${r.uv_range ? `<tr><td style="color:var(--gray);padding:4px 0">Dải UV hấp thụ</td><td class="fw-600 text-primary">${r.uv_range}</td></tr>` : ''}
           </table>
         </div>
@@ -976,7 +976,7 @@ function cosingCard(r, idx) {
           <table style="font-size:13px;width:100%;border-collapse:collapse">
             <tr><td style="color:var(--gray);padding:4px 0;width:130px">Chức năng</td><td>${r.functions || '—'}</td></tr>
             <tr><td style="color:var(--gray);padding:4px 0">Phụ lục (Annex)</td><td><span class="badge" style="color:${ac}">${al}</span></td></tr>
-            <tr><td style="color:var(--gray);padding:4px 0">Nồng độ tối đa</td><td class="fw-600 text-primary">${r.max_conc || '—'}</td></tr>
+            <tr><td style="color:var(--gray);padding:4px 0">Nồng độ tối đa</td><td class="${r.max_conc && r.max_conc !== '—' ? 'fw-600 text-primary' : ''}">${r.max_conc || '—'}</td></tr>
             <tr><td style="color:var(--gray);padding:4px 0">Quy định gốc</td><td class="fs-12">EC No. 1223/2009</td></tr>
             ${r.sccs_ref && r.sccs_ref !== '—' ? `<tr><td style="color:var(--gray);padding:4px 0">Tham chiếu SCCS</td><td class="fs-12">${r.sccs_ref}</td></tr>` : ''}
           </table>
