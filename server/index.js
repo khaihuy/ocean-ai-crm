@@ -417,7 +417,7 @@ app.get('/api/cosing/auto-import', async (req, res) => {
     // Split lines, skip metadata/BOM lines until real header row
     let lines = csv.split(/\r?\n/).filter(l => l.trim());
     // Skip any leading non-data lines: "File creation date:", "sep=,", BOM, etc.
-    while (lines.length > 0 && !lines[0].match(/cosing|inci|cas|function|restriction/i)) {
+    while (lines.length > 0 && !lines[0].match(/^["']?(COSING\s+Ref|INCI\s*name|INCI\s*Name)/i)) {
       lines = lines.slice(1);
     }
     if (lines.length < 2) throw new Error('CSV không có dữ liệu');
