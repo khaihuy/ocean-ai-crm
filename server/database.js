@@ -93,6 +93,23 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now'))
   );
 
+  -- CosIng EU ingredients database
+  CREATE TABLE IF NOT EXISTS cosing_ingredients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inci_name TEXT NOT NULL,
+    cas_no TEXT,
+    ec_no TEXT,
+    functions TEXT,
+    annex TEXT,
+    max_conc TEXT,
+    origin TEXT,
+    uv_range TEXT,
+    sccs_assessment TEXT,
+    sccs_ref TEXT,
+    source TEXT DEFAULT 'offline_cache',
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
   -- Indexes
   CREATE INDEX IF NOT EXISTS idx_clients_country ON clients(country);
   CREATE INDEX IF NOT EXISTS idx_clients_status ON clients(status);
@@ -103,6 +120,8 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_cases_deadline ON cases(deadline);
   CREATE INDEX IF NOT EXISTS idx_payments_contract ON payments(contract_id);
   CREATE INDEX IF NOT EXISTS idx_activities_entity ON activities(entity_type, entity_id);
+  CREATE INDEX IF NOT EXISTS idx_cosing_inci ON cosing_ingredients(inci_name);
+  CREATE INDEX IF NOT EXISTS idx_cosing_cas ON cosing_ingredients(cas_no);
 `);
 
 // ============================================================
@@ -141,6 +160,26 @@ if (clientCount === 0) {
   });
   tx();
   console.log('✅ Database seeded with sample data');
+}
+
+// ============================================================
+// SEED COSING INGREDIENTS
+// ============================================================
+const cosingCount = db.prepare('SELECT COUNT(*) as count FROM cosing_ingredients').get().count;
+if (cosingCount === 0) {
+  const seed = require('./cosing-seed');
+  const insertCosing = db.prepare(`
+    INSERT INTO cosing_ingredients
+      (inci_name, cas_no, ec_no, functions, annex, max_conc, origin, uv_range, sccs_assessment, sccs_ref)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const seedTx = db.transaction(() => {
+    for (const r of seed) {
+      insertCosing.run(r.i, r.c, r.e, r.f, r.a, r.m, r.o, r.u, r.s, r.r);
+    }
+  });
+  seedTx();
+  console.log(`✅ CosIng database seeded with ${seed.length} ingredients`);
 }
 
 module.exports = db;

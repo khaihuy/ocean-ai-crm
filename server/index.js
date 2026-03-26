@@ -209,6 +209,50 @@ app.get('/api/reference/services', (req, res) => {
   res.json(["Giấy chứng nhận đầu tư (IRC)", "Giấy chứng nhận đăng ký doanh nghiệp (ERC)", "Giấy phép con - An ninh mạng", "Giấy phép con - Giáo dục", "Giấy phép con - Kinh doanh hóa chất", "Công bố chất lượng thực phẩm nhập khẩu", "Công bố mỹ phẩm nhập khẩu", "Giấy phép lao động (Work Permit)", "Thẻ tạm trú (TRC)", "Thay đổi nội dung đăng ký đầu tư", "Thay đổi nội dung đăng ký doanh nghiệp", "Giấy phép kinh doanh nhập khẩu", "Đăng ký thuế & kê khai thuế ban đầu", "Tư vấn pháp lý đầu tư", "Mở tài khoản vốn đầu tư"]);
 });
 
+// ============================================================
+// API: COSING INGREDIENTS
+// ============================================================
+app.get('/api/cosing/search', (req, res) => {
+  const { q, annex, limit: lim } = req.query;
+  if (!q || q.trim().length < 2) return res.json([]);
+  const term = `%${q.trim()}%`;
+  const maxRows = Math.min(parseInt(lim) || 50, 200);
+  let sql = `SELECT * FROM cosing_ingredients WHERE (inci_name LIKE ? OR cas_no LIKE ? OR functions LIKE ?)`;
+  const params = [term, term, term];
+  if (annex && annex !== 'all') { sql += ' AND annex = ?'; params.push(annex); }
+  sql += ' ORDER BY inci_name ASC LIMIT ?';
+  params.push(maxRows);
+  res.json(db.prepare(sql).all(...params));
+});
+
+app.get('/api/cosing/stats', (req, res) => {
+  res.json({
+    total: db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c,
+    by_annex: db.prepare("SELECT annex, COUNT(*) as count FROM cosing_ingredients GROUP BY annex ORDER BY count DESC").all(),
+  });
+});
+
+app.post('/api/cosing/import', (req, res) => {
+  // Accept array of ingredient objects (full field names)
+  const rows = req.body;
+  if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'Body must be a non-empty array' });
+  const insert = db.prepare(`
+    INSERT OR REPLACE INTO cosing_ingredients
+      (inci_name, cas_no, ec_no, functions, annex, max_conc, origin, uv_range, sccs_assessment, sccs_ref, source, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  `);
+  let count = 0;
+  const tx = db.transaction(() => {
+    for (const r of rows) {
+      if (!r.inci_name) continue;
+      insert.run(r.inci_name, r.cas_no||null, r.ec_no||null, r.functions||null, r.annex||null, r.max_conc||null, r.origin||null, r.uv_range||null, r.sccs_assessment||null, r.sccs_ref||null, r.source||'import');
+      count++;
+    }
+  });
+  tx();
+  res.json({ imported: count });
+});
+
 // Serve frontend for all non-API routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));

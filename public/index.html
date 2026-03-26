@@ -494,10 +494,12 @@ async function doSearch(q) {
 }
 
 // ============================================================
-// COSING EU — LOCAL OFFLINE DATABASE
-// Source: European Commission CosIng Database (ec.europa.eu)
+// COSING EU — SERVER-SIDE SQLITE DATABASE
+// Data served via /api/cosing/search (227+ ingredients)
 // ============================================================
-const COSING_DB = [
+// COSING_DB moved to server/cosing-seed.js + SQLite
+// Keeping only display helpers:
+const _COSING_DB_REMOVED = [
   // --- Annex VI: UV Filters ---
   { inci:'POLYSILICONE-15', cas:'207574-74-1', ec:'606-621-9', fn:'UV Absorber, UV Filter, Light Stabilizer', annex:'VI', max:'10%' },
   { inci:'TITANIUM DIOXIDE', cas:'13463-67-7', ec:'236-675-5', fn:'Colorant, Opacifying, UV Absorber, UV Filter', annex:'VI', max:'25%' },
@@ -832,27 +834,36 @@ function scheduleCosingSearch(q) {
   cosingTimer = setTimeout(() => doCosingSearch(q), 300);
 }
 
-function doCosingSearch(q) {
+async function doCosingSearch(q) {
   const statusEl = document.getElementById('cosingStatus');
   const resultsEl = document.getElementById('cosingResults');
-  const term = q.toLowerCase().trim();
-  const results = COSING_DB.filter(r =>
-    r.inci.toLowerCase().includes(term) || r.cas.includes(term)
-  );
   const verifyUrl = `https://ec.europa.eu/growth/tools-databases/cosing/index.cfm?fuseaction=search.results&search_term=${encodeURIComponent(q)}&search_wtype=INCI`;
+
+  statusEl.innerHTML = `<span class="text-gray">Đang tìm kiếm...</span>`;
+  resultsEl.innerHTML = '';
+
+  let results;
+  try {
+    const resp = await fetch(`/api/cosing/search?q=${encodeURIComponent(q)}`);
+    results = await resp.json();
+  } catch(e) {
+    statusEl.textContent = '';
+    resultsEl.innerHTML = `<div class="card" style="text-align:center;padding:32px"><div class="fs-13 text-gray">Lỗi kết nối server</div></div>`;
+    return;
+  }
 
   if (results.length === 0) {
     statusEl.textContent = '';
     resultsEl.innerHTML = `
       <div class="card" style="text-align:center;padding:32px">
-        <div class="fs-13 text-gray" style="margin-bottom:12px">Không có trong offline cache với "<strong>${q}</strong>"</div>
+        <div class="fs-13 text-gray" style="margin-bottom:12px">Không tìm thấy "<strong>${q}</strong>" trong cơ sở dữ liệu</div>
         <a href="${verifyUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Tìm trực tiếp trên CosIng EU &rarr;</a>
       </div>`;
     return;
   }
 
   statusEl.innerHTML = `<span style="color:var(--success)">Tìm thấy ${results.length} thành phần</span>
-    <span class="text-gray" style="margin-left:12px">· Nguồn: CosIng EU offline cache ·
+    <span class="text-gray" style="margin-left:12px">· Nguồn: CosIng EU (SQLite) ·
       <a href="${verifyUrl}" target="_blank" rel="noopener" style="color:var(--primary)">Xác minh trên CosIng &rarr;</a>
     </span>`;
 
@@ -860,54 +871,54 @@ function doCosingSearch(q) {
 }
 
 function cosingCard(r, idx) {
-  const ac = COSING_ANNEX_COLOR[r.annex] || COSING_ANNEX_COLOR['—'];
-  const al = COSING_ANNEX_LABEL[r.annex] || r.annex;
-  const fnBadges = r.fn.split(',').map(f => f.trim()).filter(Boolean)
+  const annex = r.annex || '—';
+  const ac = COSING_ANNEX_COLOR[annex] || COSING_ANNEX_COLOR['—'];
+  const al = COSING_ANNEX_LABEL[annex] || annex;
+  const fns = (r.functions || '').split(',').map(f => f.trim()).filter(Boolean)
     .map(f => `<span style="display:inline-block;padding:2px 7px;border-radius:9px;font-size:11px;background:var(--primary-light);color:var(--primary);margin:1px">${f}</span>`).join(' ');
-  const extra = COSING_EXTRA[r.inci] || {};
-  const cosUrl = `https://ec.europa.eu/growth/tools-databases/cosing/index.cfm?fuseaction=search.results&search_term=${encodeURIComponent(r.inci)}&search_wtype=INCI`;
+  const cosUrl = `https://ec.europa.eu/growth/tools-databases/cosing/index.cfm?fuseaction=search.results&search_term=${encodeURIComponent(r.inci_name)}&search_wtype=INCI`;
 
   return `<div class="card mb-8" style="padding:16px">
     <div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleCosing(${idx})">
       <div>
-        <span class="fw-600" style="font-size:15px">${r.inci}</span>
-        <span class="fs-12 text-gray" style="margin-left:10px">CAS: ${r.cas}</span>
-        ${r.ec !== '—' ? `<span class="fs-12 text-gray" style="margin-left:6px">· EC: ${r.ec}</span>` : ''}
+        <span class="fw-600" style="font-size:15px">${r.inci_name}</span>
+        <span class="fs-12 text-gray" style="margin-left:10px">CAS: ${r.cas_no || '—'}</span>
+        ${r.ec_no && r.ec_no !== '—' ? `<span class="fs-12 text-gray" style="margin-left:6px">· EC: ${r.ec_no}</span>` : ''}
       </div>
       <div class="flex items-center gap-8">
         <span class="badge" style="color:${ac};white-space:nowrap">${al}</span>
-        ${r.max !== '—' ? `<span class="fs-12 fw-600 text-primary" style="white-space:nowrap">${r.max}</span>` : ''}
+        ${r.max_conc && r.max_conc !== '—' ? `<span class="fs-12 fw-600 text-primary" style="white-space:nowrap">${r.max_conc}</span>` : ''}
         <svg id="arr-${idx}" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" style="flex-shrink:0;transition:transform .2s"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
     </div>
-    <div style="margin-top:8px">${fnBadges}</div>
+    <div style="margin-top:8px">${fns}</div>
     <div id="det-${idx}" style="display:none;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
       <div class="grid-2" style="gap:20px">
         <div>
           <div class="fs-12 fw-600 text-gray" style="margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Thông tin nhận dạng</div>
           <table style="font-size:13px;width:100%;border-collapse:collapse">
-            <tr><td style="color:var(--gray);padding:4px 0;width:130px">INCI Name</td><td class="fw-600">${r.inci}</td></tr>
-            <tr><td style="color:var(--gray);padding:4px 0">CAS Number</td><td>${r.cas}</td></tr>
-            <tr><td style="color:var(--gray);padding:4px 0">EC Number</td><td>${r.ec}</td></tr>
-            <tr><td style="color:var(--gray);padding:4px 0">Nguồn gốc</td><td>${extra.origin || '—'}</td></tr>
-            ${extra.uv_range ? `<tr><td style="color:var(--gray);padding:4px 0">Dải UV hấp thụ</td><td class="fw-600 text-primary">${extra.uv_range}</td></tr>` : ''}
+            <tr><td style="color:var(--gray);padding:4px 0;width:130px">INCI Name</td><td class="fw-600">${r.inci_name}</td></tr>
+            <tr><td style="color:var(--gray);padding:4px 0">CAS Number</td><td>${r.cas_no || '—'}</td></tr>
+            <tr><td style="color:var(--gray);padding:4px 0">EC Number</td><td>${r.ec_no || '—'}</td></tr>
+            <tr><td style="color:var(--gray);padding:4px 0">Nguồn gốc</td><td>${r.origin || '—'}</td></tr>
+            ${r.uv_range ? `<tr><td style="color:var(--gray);padding:4px 0">Dải UV hấp thụ</td><td class="fw-600 text-primary">${r.uv_range}</td></tr>` : ''}
           </table>
         </div>
         <div>
           <div class="fs-12 fw-600 text-gray" style="margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">Quy định EU</div>
           <table style="font-size:13px;width:100%;border-collapse:collapse">
-            <tr><td style="color:var(--gray);padding:4px 0;width:130px">Chức năng</td><td>${r.fn}</td></tr>
+            <tr><td style="color:var(--gray);padding:4px 0;width:130px">Chức năng</td><td>${r.functions || '—'}</td></tr>
             <tr><td style="color:var(--gray);padding:4px 0">Phụ lục (Annex)</td><td><span class="badge" style="color:${ac}">${al}</span></td></tr>
-            <tr><td style="color:var(--gray);padding:4px 0">Nồng độ tối đa</td><td class="fw-600 text-primary">${r.max}</td></tr>
+            <tr><td style="color:var(--gray);padding:4px 0">Nồng độ tối đa</td><td class="fw-600 text-primary">${r.max_conc || '—'}</td></tr>
             <tr><td style="color:var(--gray);padding:4px 0">Quy định gốc</td><td class="fs-12">EC No. 1223/2009</td></tr>
-            ${extra.ref && extra.ref !== '—' ? `<tr><td style="color:var(--gray);padding:4px 0">Tham chiếu SCCS</td><td class="fs-12">${extra.ref}</td></tr>` : ''}
+            ${r.sccs_ref && r.sccs_ref !== '—' ? `<tr><td style="color:var(--gray);padding:4px 0">Tham chiếu SCCS</td><td class="fs-12">${r.sccs_ref}</td></tr>` : ''}
           </table>
         </div>
       </div>
-      ${extra.sccs ? `
+      ${r.sccs_assessment ? `
         <div style="margin-top:14px;padding:14px;background:var(--primary-light);border-radius:8px">
           <div class="fs-12 fw-600 text-primary" style="margin-bottom:6px">Đánh giá an toàn (SCCS/SCCNFP)</div>
-          <p class="fs-13" style="line-height:1.6;margin:0">${extra.sccs}</p>
+          <p class="fs-13" style="line-height:1.6;margin:0">${r.sccs_assessment}</p>
         </div>` : ''}
       <div style="margin-top:12px">
         <a href="${cosUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Xác minh trên CosIng EU &rarr;</a>
