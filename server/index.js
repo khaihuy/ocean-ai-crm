@@ -296,18 +296,19 @@ function mapHeaders(headers) {
     const n = h.toLowerCase().replace(/[\s.\-\/\(\)]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
     // INCI name — "Name of Common Ingredients Glossary" or "INCI Name"
     if (/reference_number|cosing_ref|^ref_no$/.test(n)) return 'cosing_ref_no';
-    if (/common_ingredients_glossary|inci_name|^inci$/.test(n)) return 'inci_name';
+    // "INCI name" / "INCI Name" / "Name of Common Ingredients Glossary"
+    if (/common_ingredients_glossary|^inci_name$|^inci_name_|^inci$/.test(n)) return 'inci_name';
     // CAS
-    if (/cas/.test(n)) return 'cas_no';
-    // EC number
-    if (/^ec_no$|^ec_number$|^ec$/.test(n)) return 'ec_no';
+    if (/^cas/.test(n)) return 'cas_no';
+    // EC / EINECS/ELINCS
+    if (/^ec_no$|^ec_number$|^ec$|einecs|elincs/.test(n)) return 'ec_no';
     // Functions
     if (/^function/.test(n)) return 'functions';
-    // Max concentration — "Maximum concentration in ready for use preparation"
+    // Max concentration
     if (/maximum_concentration|max_conc|^conc/.test(n)) return 'max_conc';
-    // Annex / Restriction — "Regulation" col in Annex exports, or "Restriction"/"Annex"
+    // Annex / Restriction / Regulation
     if (/^regulation$|^restriction$|^annex$/.test(n)) return 'annex_raw';
-    // SCCS opinions (Annex export column name)
+    // SCCS
     if (/sccs_opinion|sccs_ref/.test(n)) return 'sccs_ref';
     if (/sccs|assessment/.test(n)) return 'sccs_assessment';
     // Origin / UV (custom CSVs)
@@ -383,6 +384,92 @@ app.post('/api/cosing/import-csv', (req, res) => {
 
   const total = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
   res.json({ imported, skipped, total_in_db: total });
+});
+
+// ============================================================
+// API: COSING AUTO-IMPORT (full ~30,000 ingredient dataset)
+// GET /api/cosing/auto-import
+// Downloads CSV from Open Beauty Facts GitHub and imports to SQLite
+// ============================================================
+const COSING_FULL_CSV_URL =
+  'https://raw.githubusercontent.com/openfoodfacts/openbeautyfacts/develop/cosing/COSING_Ingredients-Fragrance.Inventory_v2.csv';
+
+app.get('/api/cosing/auto-import', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+  try {
+    send({ status: 'downloading', msg: 'Đang tải CSV từ Open Beauty Facts GitHub...' });
+
+    const response = await fetch(COSING_FULL_CSV_URL);
+    if (!response.ok) throw new Error(`HTTP ${response.status} khi tải CSV`);
+
+    const csv = await response.text();
+    send({ status: 'parsing', msg: `Đã tải ${(csv.length / 1024).toFixed(0)} KB. Đang parse...` });
+
+    // Split lines, skip BOM and "sep=," header if present
+    let lines = csv.split(/\r?\n/).filter(l => l.trim());
+    if (lines[0].startsWith('sep=') || lines[0].toLowerCase() === 'sep=,') lines = lines.slice(1);
+    if (lines.length < 2) throw new Error('CSV không có dữ liệu');
+
+    const delim   = detectDelimiter(lines[0]);
+    const rawHdrs = parseCsvLine(lines[0], delim);
+    const hdrs    = mapHeaders(rawHdrs);
+
+    if (!hdrs.includes('inci_name')) {
+      throw new Error(`Không tìm thấy cột INCI Name. Headers: ${rawHdrs.join(', ')}`);
+    }
+
+    send({ status: 'importing', msg: `${lines.length - 1} dòng, bắt đầu import...` });
+
+    const insert = db.prepare(`
+      INSERT OR REPLACE INTO cosing_ingredients
+        (cosing_ref_no, inci_name, cas_no, ec_no, functions, annex, max_conc,
+         origin, uv_range, sccs_assessment, sccs_ref, source, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'cosing_full', datetime('now'))
+    `);
+
+    let imported = 0, skipped = 0;
+    const BATCH = 1000;
+
+    for (let start = 1; start < lines.length; start += BATCH) {
+      const end = Math.min(start + BATCH, lines.length);
+      const tx = db.transaction(() => {
+        for (let i = start; i < end; i++) {
+          const vals = parseCsvLine(lines[i], delim);
+          const row  = {};
+          hdrs.forEach((h, idx) => { row[h] = vals[idx] || null; });
+
+          const inci = row.inci_name;
+          if (!inci) { skipped++; return; }
+
+          const annex = parseAnnex(row.annex_raw) || row.annex || null;
+          insert.run(
+            row.cosing_ref_no || null, inci,
+            row.cas_no || null, row.ec_no || null,
+            row.functions || null, annex,
+            row.max_conc || null, null, null, null, null,
+          );
+          imported++;
+        }
+      });
+      tx();
+
+      const pct = Math.round((end / lines.length) * 100);
+      send({ status: 'progress', imported, skipped, pct, msg: `${imported.toLocaleString()} thành phần...` });
+    }
+
+    const total = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
+    send({ status: 'done', imported, skipped, total_in_db: total,
+           msg: `Hoàn thành! ${imported.toLocaleString()} thành phần đã import. Tổng trong DB: ${total.toLocaleString()}` });
+  } catch(e) {
+    send({ status: 'error', msg: e.message });
+  }
+
+  res.end();
 });
 
 app.delete('/api/cosing/clear', (req, res) => {

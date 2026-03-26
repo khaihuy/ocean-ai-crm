@@ -470,14 +470,33 @@ function renderSearch() {
         <div id="cosingStatus" class="fs-13 text-gray mt-8"></div>
       </div>
       <div id="cosingImportPanel" style="display:none" class="card mb-16">
-        <div class="fw-600 mb-12">Import CSV từ CosIng EU</div>
+        <div class="fw-600 mb-12">Import thành phần CosIng EU</div>
+
+        <!-- Auto-import button -->
+        <div style="margin-bottom:16px;padding:14px;background:var(--primary-light);border-radius:10px">
+          <div class="fw-600 fs-13 text-primary mb-8">Tự động import ~30.000 thành phần</div>
+          <div class="fs-12 text-gray mb-10">Tải thẳng từ Open Beauty Facts (GitHub) — không cần download file thủ công.</div>
+          <button id="btnAutoImport" class="btn btn-primary" onclick="startAutoImport()" style="font-size:13px">
+            <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            Import 30.000 thành phần từ CosIng EU
+          </button>
+          <div id="autoImportProgress" style="display:none;margin-top:12px">
+            <div style="height:8px;background:var(--border);border-radius:4px;overflow:hidden">
+              <div id="autoImportBar" style="height:100%;background:var(--primary);width:0%;transition:width .4s;border-radius:4px"></div>
+            </div>
+            <div id="autoImportMsg" class="fs-12 text-gray mt-6"></div>
+          </div>
+        </div>
+
+        <div style="font-size:12px;color:var(--gray);margin-bottom:12px">
+          — hoặc upload file CSV thủ công —
+        </div>
+
         <div style="font-size:13px;color:var(--gray);margin-bottom:12px;line-height:1.6">
-          <strong>Cách tải CSV:</strong> Truy cập
+          <strong>Tải CSV từ CosIng EU:</strong>
           <a href="https://ec.europa.eu/growth/tools-databases/cosing/" target="_blank" rel="noopener" style="color:var(--primary)">CosIng EU →</a>
-          → Search (để trống) → Export → Download CSV (~30.000 thành phần).
-          <br>Format hỗ trợ: CSV phân cách bằng <code>;</code> hoặc <code>,</code>, header tiếng Anh.
-          Hoặc tải file CSV đã có sẵn từ
-          <a href="https://github.com/openfoodfacts/openbeautyfacts/tree/develop/cosing" target="_blank" rel="noopener" style="color:var(--primary)">Open Beauty Facts →</a>
+          Search (để trống) → Export → Download.
+          Hoặc từ <a href="https://github.com/openfoodfacts/openbeautyfacts/tree/develop/cosing" target="_blank" rel="noopener" style="color:var(--primary)">Open Beauty Facts →</a>
         </div>
         <div id="csvDropZone"
           ondragover="event.preventDefault();this.style.background='var(--primary-light)'"
@@ -984,6 +1003,52 @@ function toggleCosing(idx) {
 }
 
 // Load DB stats when CosIng tab is active
+async function startAutoImport() {
+  const btn  = document.getElementById('btnAutoImport');
+  const prog = document.getElementById('autoImportProgress');
+  const bar  = document.getElementById('autoImportBar');
+  const msg  = document.getElementById('autoImportMsg');
+
+  btn.disabled = true;
+  btn.textContent = 'Đang import...';
+  prog.style.display = 'block';
+  bar.style.width = '2%';
+  msg.textContent = 'Đang kết nối...';
+
+  try {
+    const evtSrc = new EventSource('/api/cosing/auto-import');
+    evtSrc.onmessage = (e) => {
+      const d = JSON.parse(e.data);
+      msg.textContent = d.msg;
+      if (d.pct) bar.style.width = d.pct + '%';
+      if (d.status === 'done') {
+        bar.style.width = '100%';
+        btn.disabled = false;
+        btn.textContent = '✅ Import hoàn thành';
+        btn.style.background = 'var(--success)';
+        loadCosingStats();
+        evtSrc.close();
+      }
+      if (d.status === 'error') {
+        msg.innerHTML = `<span style="color:var(--danger)">Lỗi: ${d.msg}</span>`;
+        btn.disabled = false;
+        btn.textContent = 'Thử lại';
+        evtSrc.close();
+      }
+    };
+    evtSrc.onerror = () => {
+      msg.innerHTML = '<span style="color:var(--danger)">Mất kết nối server</span>';
+      btn.disabled = false;
+      btn.textContent = 'Thử lại';
+      evtSrc.close();
+    };
+  } catch(e) {
+    msg.innerHTML = `<span style="color:var(--danger)">${e.message}</span>`;
+    btn.disabled = false;
+    btn.textContent = 'Thử lại';
+  }
+}
+
 async function loadCosingStats() {
   try {
     const s = await fetch('/api/cosing/stats').then(r => r.json());
