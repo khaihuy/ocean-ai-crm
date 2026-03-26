@@ -468,7 +468,7 @@ function renderSearch() {
         <div class="fw-600 mb-12">Import CSV từ CosIng EU</div>
         <div style="font-size:13px;color:var(--gray);margin-bottom:12px;line-height:1.6">
           <strong>Cách tải CSV:</strong> Truy cập
-          <a href="https://cosing2.ec.europa.eu/search" target="_blank" rel="noopener" style="color:var(--primary)">CosIng EU →</a>
+          <a href="https://ec.europa.eu/growth/tools-databases/cosing/" target="_blank" rel="noopener" style="color:var(--primary)">CosIng EU →</a>
           → Search (để trống) → Export → Download CSV (~30.000 thành phần).
           <br>Format hỗ trợ: CSV phân cách bằng <code>;</code> hoặc <code>,</code>, header tiếng Anh.
         </div>
@@ -876,7 +876,7 @@ function scheduleCosingSearch(q) {
 async function doCosingSearch(q) {
   const statusEl = document.getElementById('cosingStatus');
   const resultsEl = document.getElementById('cosingResults');
-  const verifyUrl = `https://cosing2.ec.europa.eu/search?name=${encodeURIComponent(q)}`;
+  const verifyUrl = `https://ec.europa.eu/growth/tools-databases/cosing/?name=${encodeURIComponent(q)}`;
 
   statusEl.innerHTML = `<span class="text-gray">Đang tìm kiếm...</span>`;
   resultsEl.innerHTML = '';
@@ -915,7 +915,7 @@ function cosingCard(r, idx) {
   const al = COSING_ANNEX_LABEL[annex] || annex;
   const fns = (r.functions || '').split(',').map(f => f.trim()).filter(Boolean)
     .map(f => `<span style="display:inline-block;padding:2px 7px;border-radius:9px;font-size:11px;background:var(--primary-light);color:var(--primary);margin:1px">${f}</span>`).join(' ');
-  const cosUrl = `https://cosing2.ec.europa.eu/search?name=${encodeURIComponent(r.inci_name)}`;
+  const cosUrl = `https://ec.europa.eu/growth/tools-databases/cosing/?name=${encodeURIComponent(r.inci_name)}`;
 
   return `<div class="card mb-8" style="padding:16px">
     <div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleCosing(${idx})">
