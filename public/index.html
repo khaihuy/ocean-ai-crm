@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OCEAN AI - CRM Tư vấn Đầu tư FDI</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f8fafc;color:#111827;min-height:100vh;display:flex}
+:root{--primary:#1a56db;--primary-light:#e8effe;--success:#059669;--success-light:#d1fae5;--warning:#d97706;--warning-light:#fef3c7;--danger:#dc2626;--danger-light:#fee2e2;--info:#0284c7;--info-light:#e0f2fe;--gray:#6b7280;--gray-light:#f3f4f6;--dark:#111827;--white:#fff;--border:#e5e7eb}
+.sidebar{width:240px;background:#0f172a;color:#fff;display:flex;flex-direction:column;position:fixed;height:100vh;z-index:100;transition:width .3s}
+.sidebar.collapsed{width:64px}
+.sidebar-header{padding:20px 16px;border-bottom:1px solid #1e293b}
+.sidebar-header .logo{font-size:18px;font-weight:700;color:#60a5fa}
+.sidebar-header .subtitle{font-size:11px;color:#94a3b8;margin-top:4px}
+.sidebar nav{flex:1;padding:12px 8px}
+.nav-item{display:flex;align-items:center;gap:12px;width:100%;padding:10px 12px;border-radius:8px;border:none;cursor:pointer;margin-bottom:4px;background:transparent;color:#94a3b8;font-size:13px;font-weight:500;text-align:left;transition:all .2s}
+.nav-item:hover,.nav-item.active{background:#1e40af;color:#fff}
+.nav-item svg{width:20px;height:20px;flex-shrink:0}
+.main{flex:1;margin-left:240px;display:flex;flex-direction:column;min-height:100vh}
+.header{display:flex;align-items:center;justify-content:space-between;padding:12px 24px;background:#fff;border-bottom:1px solid var(--border);position:sticky;top:0;z-index:50}
+.search-box{position:relative;flex:1;max-width:400px}
+.search-box input{width:100%;padding:8px 12px 8px 36px;border-radius:8px;border:1px solid var(--border);font-size:13px;outline:none}
+.search-box svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--gray)}
+.content{flex:1;padding:24px;overflow:auto}
+.card{background:#fff;border-radius:12px;border:1px solid var(--border);padding:20px;margin-bottom:16px}
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-bottom:24px}
+.stat-card{display:flex;align-items:center;gap:16px}
+.stat-icon{width:48px;height:48px;border-radius:12px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.stat-label{font-size:13px;color:var(--gray)}
+.stat-value{font-size:22px;font-weight:700}
+.stat-sub{font-size:12px;color:var(--gray);margin-top:2px}
+.badge{display:inline-block;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:600;white-space:nowrap}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.btn{border:none;border-radius:8px;cursor:pointer;font-weight:600;display:inline-flex;align-items:center;gap:6px;padding:8px 16px;font-size:13px;transition:all .2s}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:#1648b8}
+.btn-outline{background:transparent;color:var(--primary);border:1px solid var(--primary)}
+.btn-ghost{background:transparent;color:var(--gray)}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-sm{padding:6px 12px;font-size:12px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+table th{padding:10px 14px;text-align:left;font-weight:600;background:var(--gray-light);border-bottom:1px solid var(--border);white-space:nowrap}
+table td{padding:10px 14px;border-bottom:1px solid var(--border)}
+table tr:hover{background:var(--gray-light)}
+.progress-bar{width:100%;background:var(--gray-light);border-radius:8px;height:8px;overflow:hidden}
+.progress-fill{height:100%;border-radius:8px;transition:width .3s}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:1000}
+.modal{background:#fff;border-radius:16px;width:min(700px,95vw);max-height:90vh;overflow:auto;padding:24px}
+.modal-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
+.modal-header h3{font-size:18px}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border);font-size:13px;outline:none;font-family:inherit}
+.form-group textarea{resize:vertical}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.text-right{text-align:right}
+.text-danger{color:var(--danger)}
+.text-success{color:var(--success)}
+.text-warning{color:var(--warning)}
+.text-primary{color:var(--primary)}
+.text-gray{color:var(--gray)}
+.fw-600{font-weight:600}
+.fw-700{font-weight:700}
+.fs-12{font-size:12px}
+.fs-13{font-size:13px}
+.fs-15{font-size:15px}
+.fs-22{font-size:22px}
+.mt-8{margin-top:8px}
+.mt-16{margin-top:16px}
+.mt-20{margin-top:20px}
+.mb-16{margin-bottom:16px}
+.mb-24{margin-bottom:24px}
+.gap-8{gap:8px}
+.gap-12{gap:12px}
+.flex{display:flex}
+.items-center{align-items:center}
+.justify-between{justify-content:space-between}
+.flex-wrap{flex-wrap:wrap}
+.kanban{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px}
+.kanban-col{min-width:240px;flex:0 0 240px}
+.kanban-header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--gray-light);border-radius:8px;margin-bottom:8px}
+.kanban-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer;transition:box-shadow .2s}
+.kanban-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.1)}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.info-panel{background:var(--primary-light);border-radius:12px;padding:16px;margin-bottom:16px}
+@media(max-width:768px){.sidebar{width:64px}.main{margin-left:64px}.grid-2{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="logo">OCEAN AI</div>
+    <div class="subtitle">CRM Tư vấn Đầu tư FDI</div>
+  </div>
+  <nav>
+    <button class="nav-item active" data-page="dashboard" onclick="navigate('dashboard',this)">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      <span>Dashboard</span>
+    </button>
+    <button class="nav-item" data-page="clients" onclick="navigate('clients',this)">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      <span>Khách hàng</span>
+    </button>
+    <button class="nav-item" data-page="contracts" onclick="navigate('contracts',this)">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+      <span>Hợp đồng</span>
+    </button>
+    <button class="nav-item" data-page="cases" onclick="navigate('cases',this)">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span>Hồ sơ & GP</span>
+    </button>
+    <button class="nav-item" data-page="finance" onclick="navigate('finance',this)">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      <span>Tài chính</span>
+    </button>
+    <button class="nav-item" data-page="search" onclick="navigate('search',this)">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <span>Tra cứu</span>
+    </button>
+  </nav>
+</aside>
+
+<!-- Main -->
+<div class="main">
+  <header class="header">
+    <div class="search-box">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="globalSearch" placeholder="Tìm kiếm nhanh..." oninput="handleGlobalSearch(this.value)">
+    </div>
+    <div class="flex items-center gap-12">
+      <span class="fs-13 text-gray" id="currentDate"></span>
+      <div class="avatar">KG</div>
+    </div>
+  </header>
+  <main class="content" id="content">
+    <!-- Content loaded dynamically -->
+  </main>
+</div>
+
+<script>
+// ============================================================
+// STATE & API
+// ============================================================
+const API = '';
+let state = { clients: [], contracts: [], cases: [], dashboard: null };
+
+async function api(url, opts) {
+  const res = await fetch(API + url, { headers: { 'Content-Type': 'application/json' }, ...opts });
+  return res.json();
+}
+
+async function loadData() {
+  [state.clients, state.contracts, state.cases, state.dashboard] = await Promise.all([
+    api('/api/clients'), api('/api/contracts'), api('/api/cases'), api('/api/dashboard')
+  ]);
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+const fmt = n => new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n);
+const fmtDate = d => d ? new Date(d).toLocaleDateString('vi-VN') : '—';
+const today = () => new Date().toISOString().split('T')[0];
+
+const statusColors = {
+  'Tiếp nhận':'info','Đang xử lý':'warning','Chờ bổ sung':'pink','Đã nộp':'primary','Đã cấp phép':'success','Từ chối':'danger',
+  'Dự thảo':'gray','Đang thực hiện':'warning','Tạm dừng':'pink','Hoàn thành':'success','Thanh lý':'gray',
+  'Đang hoạt động':'success','Tiềm năng':'primary','Ngừng hoạt động':'danger',
+  'Chưa thanh toán':'danger','Thanh toán một phần':'warning','Đã thanh toán':'success',
+  'Cao':'danger','Trung bình':'warning','Thấp':'success'
+};
+
+function badge(text) {
+  const colorMap = { info:'#0284c7;background:#e0f2fe', warning:'#d97706;background:#fef3c7', pink:'#be185d;background:#fce7f3', primary:'#1a56db;background:#e8effe', success:'#059669;background:#d1fae5', danger:'#dc2626;background:#fee2e2', gray:'#6b7280;background:#f3f4f6' };
+  const c = colorMap[statusColors[text] || 'gray'] || colorMap.gray;
+  return `<span class="badge" style="color:${c}">${text}</span>`;
+}
+
+function progressBar(val, h=8) {
+  const color = val >= 100 ? 'var(--success)' : val >= 50 ? 'var(--primary)' : 'var(--warning)';
+  return `<div class="progress-bar" style="height:${h}px"><div class="progress-fill" style="width:${Math.min(val,100)}%;background:${color}"></div></div>`;
+}
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+let currentPage = 'dashboard';
+function navigate(page, btn) {
+  currentPage = page;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  else document.querySelector(`[data-page="${page}"]`)?.classList.add('active');
+  render();
+}
+
+function handleGlobalSearch(val) {
+  if (currentPage !== 'search') navigate('search');
+  setTimeout(() => { const el = document.getElementById('searchInput'); if (el) { el.value = val; el.dispatchEvent(new Event('input')); }}, 100);
+}
+
+// ============================================================
+// RENDER PAGES
+// ============================================================
+async function render() {
+  await loadData();
+  const el = document.getElementById('content');
+  switch (currentPage) {
+    case 'dashboard': el.innerHTML = renderDashboard(); break;
+    case 'clients': el.innerHTML = renderClients(); break;
+    case 'contracts': el.innerHTML = renderContracts(); break;
+    case 'cases': el.innerHTML = renderCases(); break;
+    case 'finance': el.innerHTML = renderFinance(); break;
+    case 'search': el.innerHTML = renderSearch(); break;
+  }
+}
+
+function renderDashboard() {
+  const d = state.dashboard;
+  if (!d) return '<div class="text-gray">Đang tải...</div>';
+  const totalDebt = d.contracts.total_value - d.contracts.total_paid;
+  const collectRate = d.contracts.total_value > 0 ? Math.round(d.contracts.total_paid / d.contracts.total_value * 100) : 0;
+
+  return `
+    <h2 class="mb-24" style="font-size:22px">Dashboard Tổng Quan</h2>
+    <div class="stat-grid">
+      ${statCard('Tổng khách hàng', d.clients.total, `${d.clients.active} đang hoạt động`, 'var(--primary)')}
+      ${statCard('Hợp đồng', d.contracts.total, `${d.contracts.active} đang thực hiện`, 'var(--success)')}
+      ${statCard('Hồ sơ đang xử lý', d.cases.active, `${d.cases.urgent} ưu tiên cao`, 'var(--warning)')}
+      ${statCard('Doanh thu', fmt(d.contracts.total_value), `Công nợ: ${fmt(totalDebt)}`, 'var(--info)')}
+    </div>
+    <div class="grid-2">
+      <div class="card">
+        <h3 class="fs-15 mb-16">Hồ sơ sắp đến hạn (30 ngày tới)</h3>
+        ${d.cases.upcoming_deadlines.length === 0 ? '<div class="text-gray fs-13">Không có hồ sơ nào sắp đến hạn</div>' :
+          d.cases.upcoming_deadlines.map(c => `
+            <div class="flex justify-between items-center" style="padding:8px 0;border-bottom:1px solid var(--border)">
+              <div><div class="fs-13 fw-600">${c.case_name}</div><div class="fs-12 text-gray">${c.client_name || ''}</div></div>
+              <div class="text-right">${badge(c.status)}<div class="fs-12 text-danger mt-8">Hạn: ${fmtDate(c.deadline)}</div></div>
+            </div>`).join('')}
+      </div>
+      <div class="card">
+        <h3 class="fs-15 mb-16">Phân bố theo quốc gia</h3>
+        ${d.clients.by_country.slice(0, 6).map(c => `
+          <div class="flex items-center gap-12" style="margin-bottom:10px">
+            <div style="width:100px" class="fs-13 fw-600">${c.country}</div>
+            <div style="flex:1">${progressBar(c.count / d.clients.total * 100)}</div>
+            <div class="fs-13 fw-600" style="min-width:24px;text-align:right">${c.count}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+    <div class="grid-2 mt-16">
+      <div class="card">
+        <h3 class="fs-15 mb-16">Dịch vụ phổ biến</h3>
+        ${d.contracts.by_service.slice(0, 5).map(s => `
+          <div class="flex justify-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+            <span>${s.service_type}</span><span class="fw-600 text-primary">${s.count} HĐ</span>
+          </div>`).join('')}
+      </div>
+      <div class="card">
+        <h3 class="fs-15 mb-16">Tình hình thanh toán</h3>
+        <div style="margin-bottom:12px">
+          <div class="flex justify-between fs-13" style="margin-bottom:4px"><span>Đã thu</span><span class="fw-600 text-success">${fmt(d.contracts.total_paid)}</span></div>
+          ${progressBar(collectRate)}
+        </div>
+        <div style="margin-bottom:12px">
+          <div class="flex justify-between fs-13" style="margin-bottom:4px"><span>Công nợ</span><span class="fw-600 text-danger">${fmt(totalDebt)}</span></div>
+          ${progressBar(100 - collectRate)}
+        </div>
+        <div style="margin-top:12px;padding:10px;background:var(--gray-light);border-radius:8px;font-size:13px">
+          <div class="flex justify-between"><span class="fw-600">Tổng giá trị HĐ:</span><span class="fw-700 text-primary">${fmt(d.contracts.total_value)}</span></div>
+          <div class="flex justify-between mt-8"><span>Tỷ lệ thu hồi:</span><span class="fw-600">${collectRate}%</span></div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function statCard(label, value, sub, color) {
+  return `<div class="card stat-card"><div class="stat-icon" style="background:${color}15;color:${color}">
+    <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+  </div><div><div class="stat-label">${label}</div><div class="stat-value">${value}</div>${sub ? `<div class="stat-sub">${sub}</div>` : ''}</div></div>`;
+}
+
+// --- CLIENTS PAGE ---
+function renderClients() {
+  const clients = state.clients;
+  return `
+    <div class="flex justify-between items-center mb-24">
+      <h2 style="font-size:22px">Quản lý Khách hàng FDI</h2>
+      <button class="btn btn-primary" onclick="showClientForm()">+ Thêm khách hàng</button>
+    </div>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Tên doanh nghiệp</th><th>Quốc gia</th><th>Ngành nghề</th><th>Người đại diện</th><th>Vốn đầu tư (USD)</th><th>Trạng thái</th><th></th></tr></thead>
+        <tbody>
+          ${clients.map(c => `<tr style="cursor:pointer" onclick="showClientDetail('${c.id}')">
+            <td class="fw-600">${c.name}</td><td>${c.country || ''}</td><td>${c.industry || ''}</td><td>${c.representative || ''}</td>
+            <td>${c.investment_capital ? '$' + Number(c.investment_capital).toLocaleString() : '—'}</td>
+            <td>${badge(c.status)}</td>
+            <td><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();showClientForm('${c.id}')">Sửa</button>
+            <button class="btn btn-ghost btn-sm text-danger" onclick="event.stopPropagation();deleteClient('${c.id}')">Xóa</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="fs-12 text-gray mt-8">${clients.length} khách hàng</div>`;
+}
+
+// --- CONTRACTS PAGE ---
+function renderContracts() {
+  const contracts = state.contracts;
+  return `
+    <div class="flex justify-between items-center mb-24">
+      <h2 style="font-size:22px">Quản lý Hợp đồng & Dịch vụ</h2>
+      <button class="btn btn-primary" onclick="showContractForm()">+ Thêm hợp đồng</button>
+    </div>
+    <div class="card" style="overflow-x:auto">
+      <table>
+        <thead><tr><th>Số HĐ</th><th>Khách hàng</th><th>Loại dịch vụ</th><th>Giá trị</th><th>Trạng thái</th><th>Thanh toán</th><th>Ngày KT</th><th></th></tr></thead>
+        <tbody>
+          ${contracts.map(c => `<tr>
+            <td class="fw-600 text-primary">${c.contract_no}</td><td>${c.client_name || ''}</td><td class="fs-12">${c.service_type}</td>
+            <td class="fw-600">${fmt(c.value)}</td><td>${badge(c.status)}</td><td>${badge(c.payment_status)}</td><td>${fmtDate(c.end_date)}</td>
+            <td><button class="btn btn-ghost btn-sm" onclick="showContractForm('${c.id}')">Sửa</button>
+            <button class="btn btn-ghost btn-sm text-danger" onclick="deleteContract('${c.id}')">Xóa</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="fs-12 text-gray mt-8">${contracts.length} hợp đồng &bull; Tổng: ${fmt(contracts.reduce((s,c)=>s+c.value,0))}</div>`;
+}
+
+// --- CASES PAGE ---
+function renderCases() {
+  const cases = state.cases;
+  return `
+    <div class="flex justify-between items-center mb-24">
+      <h2 style="font-size:22px">Hồ sơ & Tiến độ Giấy phép</h2>
+      <div class="flex gap-8">
+        <button class="btn btn-outline btn-sm" onclick="toggleCaseView()">Kanban / Bảng</button>
+        <button class="btn btn-primary" onclick="showCaseForm()">+ Thêm hồ sơ</button>
+      </div>
+    </div>
+    <div id="caseView">
+      <div class="card" style="overflow-x:auto">
+        <table>
+          <thead><tr><th>Tên hồ sơ</th><th>Khách hàng</th><th>Số HĐ</th><th>Trạng thái</th><th>Ưu tiên</th><th>Tiến độ</th><th>Phụ trách</th><th>Deadline</th><th></th></tr></thead>
+          <tbody>
+            ${cases.map(c => {
+              let deadlineColor = '';
+              if (c.deadline) { const diff = (new Date(c.deadline) - new Date()) / 864e5; deadlineColor = diff < 7 ? 'text-danger' : diff < 30 ? 'text-warning' : ''; }
+              return `<tr>
+                <td class="fw-600">${c.case_name}</td><td>${c.client_name || ''}</td><td>${c.contract_no || ''}</td>
+                <td>${badge(c.status)}</td><td>${badge(c.priority)}</td>
+                <td style="min-width:80px">${progressBar(c.progress, 6)}<span class="fs-12 text-gray">${c.progress}%</span></td>
+                <td>${c.assignee || ''}</td><td class="${deadlineColor}">${fmtDate(c.deadline)}</td>
+                <td><button class="btn btn-ghost btn-sm" onclick="showCaseForm('${c.id}')">Sửa</button>
+                <button class="btn btn-ghost btn-sm text-danger" onclick="deleteCase('${c.id}')">Xóa</button></td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="fs-12 text-gray mt-8">${cases.length} hồ sơ</div>`;
+}
+
+// --- FINANCE PAGE ---
+function renderFinance() {
+  const d = state.dashboard;
+  if (!d) return '';
+  const totalDebt = d.contracts.total_value - d.contracts.total_paid;
+  const overdue = state.contracts.filter(c => c.payment_status !== 'Đã thanh toán' && c.end_date && new Date(c.end_date) < new Date());
+
+  // Group by client
+  const byClient = {};
+  state.contracts.forEach(c => {
+    const name = c.client_name || 'Unknown';
+    if (!byClient[name]) byClient[name] = { total: 0, paid: 0 };
+    byClient[name].total += c.value;
+    byClient[name].paid += c.paid_amount;
+  });
+  const clientDebts = Object.entries(byClient).map(([name, d]) => ({ name, ...d, debt: d.total - d.paid })).sort((a, b) => b.debt - a.debt);
+
+  return `
+    <h2 class="mb-24" style="font-size:22px">Tài chính & Thanh toán</h2>
+    <div class="stat-grid">
+      ${statCard('Tổng doanh thu', fmt(d.contracts.total_value), '', 'var(--primary)')}
+      ${statCard('Đã thu', fmt(d.contracts.total_paid), `${d.contracts.total_value > 0 ? Math.round(d.contracts.total_paid/d.contracts.total_value*100) : 0}%`, 'var(--success)')}
+      ${statCard('Công nợ', fmt(totalDebt), '', 'var(--danger)')}
+      ${statCard('Quá hạn TT', `${overdue.length} HĐ`, fmt(overdue.reduce((s,c) => s + (c.value - c.paid_amount), 0)), 'var(--warning)')}
+    </div>
+    <div class="card">
+      <h3 class="fs-15 mb-16">Công nợ theo khách hàng</h3>
+      <table>
+        <thead><tr><th>Khách hàng</th><th>Tổng giá trị HĐ</th><th>Đã thanh toán</th><th>Công nợ</th><th>Tỷ lệ thu</th></tr></thead>
+        <tbody>
+          ${clientDebts.map(c => `<tr>
+            <td class="fw-600">${c.name}</td><td>${fmt(c.total)}</td>
+            <td class="text-success">${fmt(c.paid)}</td>
+            <td class="fw-600 ${c.debt > 0 ? 'text-danger' : 'text-success'}">${fmt(c.debt)}</td>
+            <td style="min-width:80px">${progressBar(c.total > 0 ? c.paid / c.total * 100 : 0, 6)}<span class="fs-12 text-gray">${c.total > 0 ? Math.round(c.paid / c.total * 100) : 0}%</span></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    ${overdue.length > 0 ? `
+    <div class="card mt-16">
+      <h3 class="fs-15 mb-16 text-danger">Hợp đồng quá hạn thanh toán</h3>
+      <table>
+        <thead><tr><th>Số HĐ</th><th>Khách hàng</th><th>Giá trị</th><th>Đã TT</th><th>Ngày KT</th><th>Trạng thái</th></tr></thead>
+        <tbody>
+          ${overdue.map(c => `<tr>
+            <td class="fw-600">${c.contract_no}</td><td>${c.client_name}</td><td>${fmt(c.value)}</td>
+            <td>${fmt(c.paid_amount)}</td><td class="text-danger">${fmtDate(c.end_date)}</td><td>${badge(c.payment_status)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : ''}`;
+}
+
+// --- SEARCH PAGE ---
+function renderSearch() {
+  return `
+    <h2 class="mb-24" style="font-size:22px">Tra cứu & Tìm kiếm</h2>
+    <div class="card mb-16">
+      <input type="text" id="searchInput" placeholder="Tìm kiếm theo tên khách hàng, số hợp đồng, tên hồ sơ, người phụ trách..."
+        style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid var(--primary);font-size:14px;outline:none"
+        oninput="doSearch(this.value)">
+      <div id="searchCount" class="fs-13 text-gray mt-8"></div>
+    </div>
+    <div class="info-panel">
+      <h3 class="fs-15 text-primary" style="margin-bottom:8px">Tra cứu thành phần mỹ phẩm / thực phẩm (CosIng EU)</h3>
+      <p class="fs-13">Để tra cứu thành phần trên database CosIng của EU, hãy yêu cầu Claude AI tra cứu trực tiếp trong chat.</p>
+    </div>
+    <div id="searchResults"></div>`;
+}
+
+async function doSearch(q) {
+  if (q.length < 2) { document.getElementById('searchResults').innerHTML = ''; document.getElementById('searchCount').textContent = ''; return; }
+  const res = await api(`/api/search?q=${encodeURIComponent(q)}`);
+  const total = res.clients.length + res.contracts.length + res.cases.length;
+  document.getElementById('searchCount').textContent = `Tìm thấy ${total} kết quả`;
+  let html = '';
+  if (res.clients.length) {
+    html += `<div class="card mb-16"><h3 class="fs-15 mb-16">Khách hàng (${res.clients.length})</h3>`;
+    res.clients.forEach(c => { html += `<div class="flex justify-between items-center" style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;cursor:pointer" onclick="navigate('clients')"><div><span class="fw-600">${c.name}</span> — ${c.representative || ''} (${c.country || ''})</div>${badge(c.status)}</div>`; });
+    html += '</div>';
+  }
+  if (res.contracts.length) {
+    html += `<div class="card mb-16"><h3 class="fs-15 mb-16">Hợp đồng (${res.contracts.length})</h3>`;
+    res.contracts.forEach(c => { html += `<div class="flex justify-between items-center" style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><div><span class="fw-600 text-primary">${c.contract_no}</span> — ${c.client_name || ''} — ${c.service_type}</div><div class="flex gap-8 items-center">${badge(c.status)}<span class="fw-600">${fmt(c.value)}</span></div></div>`; });
+    html += '</div>';
+  }
+  if (res.cases.length) {
+    html += `<div class="card mb-16"><h3 class="fs-15 mb-16">Hồ sơ (${res.cases.length})</h3>`;
+    res.cases.forEach(c => { html += `<div class="flex justify-between items-center" style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><div><span class="fw-600">${c.case_name}</span> — ${c.client_name || ''}</div><div class="flex gap-8">${badge(c.status)}${badge(c.priority)}</div></div>`; });
+    html += '</div>';
+  }
+  if (total === 0) html = `<div class="card" style="text-align:center;padding:40px;color:var(--gray)">Không tìm thấy kết quả phù hợp với "${q}"</div>`;
+  document.getElementById('searchResults').innerHTML = html;
+}
+
+// ============================================================
+// FORMS & MODALS
+// ============================================================
+function showModal(title, content) {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'modalOverlay';
+  overlay.onclick = e => { if (e.target === overlay) closeModal(); };
+  overlay.innerHTML = `<div class="modal"><div class="modal-header"><h3>${title}</h3><button onclick="closeModal()" style="background:none;border:none;cursor:pointer;font-size:20px">&times;</button></div>${content}</div>`;
+  document.body.appendChild(overlay);
+}
+
+function closeModal() { document.getElementById('modalOverlay')?.remove(); }
+
+function showClientForm(id) {
+  const c = id ? state.clients.find(x => x.id === id) : {};
+  const countries = ["Nhật Bản","Hàn Quốc","Trung Quốc","Đài Loan","Singapore","Thái Lan","Hoa Kỳ","Đức","Pháp","Anh","Hà Lan","Úc","Canada","Ấn Độ","Hồng Kông","Malaysia"];
+  const industries = ["Sản xuất","Thương mại","Dịch vụ","Công nghệ thông tin","Thực phẩm & Đồ uống","Mỹ phẩm","Hóa chất","Dược phẩm","Bất động sản","Logistics","Giáo dục","Y tế","Nông nghiệp","Năng lượng"];
+  showModal(id ? 'Chỉnh sửa khách hàng' : 'Thêm khách hàng mới', `
+    <form onsubmit="saveClient(event,'${id||''}')">
+      <div class="form-grid">
+        <div class="form-group"><label>Tên doanh nghiệp *</label><input name="name" value="${c.name||''}" required></div>
+        <div class="form-group"><label>Quốc gia *</label><select name="country">${countries.map(x=>`<option ${c.country===x?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Ngành nghề</label><select name="industry"><option>—</option>${industries.map(x=>`<option ${c.industry===x?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Trạng thái</label><select name="status">${['Tiềm năng','Đang hoạt động','Ngừng hoạt động'].map(x=>`<option ${c.status===x?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Người đại diện *</label><input name="representative" value="${c.representative||''}" required></div>
+        <div class="form-group"><label>Email</label><input name="email" type="email" value="${c.email||''}"></div>
+        <div class="form-group"><label>Điện thoại</label><input name="phone" value="${c.phone||''}"></div>
+        <div class="form-group"><label>Vốn đầu tư (USD)</label><input name="investment_capital" type="number" value="${c.investment_capital||''}"></div>
+      </div>
+      <div class="form-group"><label>Địa chỉ</label><input name="address" value="${c.address||''}"></div>
+      <div class="form-group"><label>Ghi chú</label><textarea name="notes" rows="3">${c.notes||''}</textarea></div>
+      <div class="flex justify-between mt-16"><button type="button" class="btn btn-ghost" onclick="closeModal()">Hủy</button><button type="submit" class="btn btn-primary">Lưu</button></div>
+    </form>`);
+}
+
+async function saveClient(e, id) {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const data = Object.fromEntries(fd);
+  data.investment_capital = Number(data.investment_capital) || 0;
+  if (id) await api(`/api/clients/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  else await api('/api/clients', { method: 'POST', body: JSON.stringify(data) });
+  closeModal(); render();
+}
+
+async function deleteClient(id) { if (confirm('Xóa khách hàng này?')) { await api(`/api/clients/${id}`, { method: 'DELETE' }); render(); } }
+
+async function showClientDetail(id) {
+  const data = await api(`/api/clients/${id}`);
+  showModal('Chi tiết khách hàng', `
+    <div class="form-grid fs-13">
+      ${[['Tên DN', data.name],['Quốc gia', data.country],['Ngành nghề', data.industry],['Người ĐD', data.representative],['Email', data.email],['SĐT', data.phone],['Vốn ĐT', data.investment_capital ? '$'+Number(data.investment_capital).toLocaleString() : '—'],['Ngày tạo', fmtDate(data.created_at)]].map(([l,v])=>`<div style="margin-bottom:8px"><div class="fw-600 text-gray">${l}</div><div>${v||'—'}</div></div>`).join('')}
+    </div>
+    ${data.notes ? `<div style="margin-top:12px;padding:12px;background:var(--gray-light);border-radius:8px;font-size:13px"><strong>Ghi chú:</strong> ${data.notes}</div>` : ''}
+    <h4 class="mt-20 mb-16 fs-15">Hợp đồng liên quan</h4>
+    ${data.contracts.length === 0 ? '<div class="fs-13 text-gray">Chưa có hợp đồng</div>' :
+      data.contracts.map(c => `<div class="flex justify-between items-center" style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px"><div><span class="fw-600">${c.contract_no}</span> — ${c.service_type}</div><div class="flex gap-8 items-center">${badge(c.status)}<span class="fw-600">${fmt(c.value)}</span></div></div>`).join('')}`);
+}
+
+function showContractForm(id) {
+  const c = id ? state.contracts.find(x => x.id === id) : {};
+  const services = ["Giấy chứng nhận đầu tư (IRC)","Giấy chứng nhận đăng ký doanh nghiệp (ERC)","Giấy phép con - An ninh mạng","Giấy phép con - Giáo dục","Giấy phép con - Kinh doanh hóa chất","Công bố chất lượng thực phẩm nhập khẩu","Công bố mỹ phẩm nhập khẩu","Giấy phép lao động (Work Permit)","Thẻ tạm trú (TRC)","Thay đổi nội dung đăng ký đầu tư","Giấy phép kinh doanh nhập khẩu","Tư vấn pháp lý đầu tư","Mở tài khoản vốn đầu tư"];
+  showModal(id ? 'Chỉnh sửa hợp đồng' : 'Thêm hợp đồng mới', `
+    <form onsubmit="saveContract(event,'${id||''}')">
+      <div class="form-grid">
+        <div class="form-group"><label>Khách hàng *</label><select name="client_id" required>${state.clients.map(x=>`<option value="${x.id}" ${c.client_id===x.id?'selected':''}>${x.name}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Số hợp đồng *</label><input name="contract_no" value="${c.contract_no||''}" required></div>
+        <div class="form-group"><label>Loại dịch vụ *</label><select name="service_type">${services.map(x=>`<option ${c.service_type===x?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Giá trị (VNĐ) *</label><input name="value" type="number" value="${c.value||''}" required></div>
+        <div class="form-group"><label>Ngày BĐ</label><input name="start_date" type="date" value="${c.start_date||today()}"></div>
+        <div class="form-group"><label>Ngày KT</label><input name="end_date" type="date" value="${c.end_date||''}"></div>
+        <div class="form-group"><label>Trạng thái HĐ</label><select name="status">${['Dự thảo','Đang thực hiện','Tạm dừng','Hoàn thành','Thanh lý'].map(x=>`<option ${c.status===x?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Trạng thái TT</label><select name="payment_status">${['Chưa thanh toán','Thanh toán một phần','Đã thanh toán'].map(x=>`<option ${c.payment_status===x?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Đã TT (VNĐ)</label><input name="paid_amount" type="number" value="${c.paid_amount||0}"></div>
+      </div>
+      <div class="form-group"><label>Ghi chú</label><textarea name="notes" rows="3">${c.notes||''}</textarea></div>
+      <div class="flex justify-between mt-16"><button type="button" class="btn btn-ghost" onclick="closeModal()">Hủy</button><button type="submit" class="btn btn-primary">Lưu</button></div>
+    </form>`);
+}
+
+async function saveContract(e, id) {
+  e.preventDefault();
+  const fd = new FormData(e.target); const data = Object.fromEntries(fd);
+  data.value = Number(data.value) || 0; data.paid_amount = Number(data.paid_amount) || 0;
+  if (id) await api(`/api/contracts/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  else await api('/api/contracts', { method: 'POST', body: JSON.stringify(data) });
+  closeModal(); render();
+}
+
+async function deleteContract(id) { if (confirm('Xóa hợp đồng này?')) { await api(`/api/contracts/${id}`, { method: 'DELETE' }); render(); } }
+
+function showCaseForm(id) {
+  const c = id ? state.cases.find(x => x.id === id) : {};
+  const services = ["Giấy chứng nhận đầu tư (IRC)","Giấy chứng nhận đăng ký doanh nghiệp (ERC)","Giấy phép con - An ninh mạng","Giấy phép con - Giáo dục","Giấy phép con - Kinh doanh hóa chất","Công bố chất lượng thực phẩm nhập khẩu","Công bố mỹ phẩm nhập khẩu","Giấy phép lao động (Work Permit)","Thẻ tạm trú (TRC)","Giấy phép kinh doanh nhập khẩu","Tư vấn pháp lý đầu tư"];
+  showModal(id ? 'Chỉnh sửa hồ sơ' : 'Thêm hồ sơ mới', `
+    <form onsubmit="saveCase(event,'${id||''}')">
+      <div class="form-grid">
+        <div class="form-group"><label>Hợp đồng</label><select name="contract_id">${state.contracts.map(x=>`<option value="${x.id}" ${c.contract_id===x.id?'selected':''}>${x.contract_no} - ${x.client_name||''}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Tên hồ sơ *</label><input name="case_name" value="${c.case_name||''}" required></div>
+        <div class="form-group"><label>Loại dịch vụ</label><select name="service_type">${services.map(x=>`<option ${c.service_type===x?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Trạng thái</label><select name="status">${['Tiếp nhận','Đang xử lý','Chờ bổ sung','Đã nộp','Đã cấp phép','Từ chối'].map(x=>`<option ${c.status===x?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Độ ưu tiên</label><select name="priority">${['Cao','Trung bình','Thấp'].map(x=>`<option ${c.priority===x?'selected':''}>${x}</option>`).join('')}</select></div>
+        <div class="form-group"><label>Người phụ trách</label><input name="assignee" value="${c.assignee||''}"></div>
+        <div class="form-group"><label>Tiến độ (%)</label><input name="progress" type="number" min="0" max="100" value="${c.progress||0}"></div>
+        <div class="form-group"><label>Ngày bắt đầu</label><input name="start_date" type="date" value="${c.start_date||today()}"></div>
+        <div class="form-group"><label>Deadline</label><input name="deadline" type="date" value="${c.deadline||''}"></div>
+      </div>
+      <div class="form-group"><label>Ghi chú</label><textarea name="notes" rows="3">${c.notes||''}</textarea></div>
+      <div class="flex justify-between mt-16"><button type="button" class="btn btn-ghost" onclick="closeModal()">Hủy</button><button type="submit" class="btn btn-primary">Lưu</button></div>
+    </form>`);
+}
+
+async function saveCase(e, id) {
+  e.preventDefault();
+  const fd = new FormData(e.target); const data = Object.fromEntries(fd);
+  data.progress = Number(data.progress) || 0;
+  if (id) await api(`/api/cases/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+  else await api('/api/cases', { method: 'POST', body: JSON.stringify(data) });
+  closeModal(); render();
+}
+
+async function deleteCase(id) { if (confirm('Xóa hồ sơ này?')) { await api(`/api/cases/${id}`, { method: 'DELETE' }); render(); } }
+
+// ============================================================
+// INIT
+// ============================================================
+document.getElementById('currentDate').textContent = new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+render();
+</script>
+</body>
+</html>
