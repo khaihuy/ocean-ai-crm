@@ -180,6 +180,70 @@ app.get('/api/dashboard', (req, res) => {
 });
 
 // ============================================================
+// API: COSING EU — Ingredient Lookup Proxy
+// ============================================================
+app.get('/api/cosing/search', async (req, res) => {
+  const { q } = req.query;
+  if (!q || q.trim().length < 2) return res.json({ results: [], error: null });
+
+  const term = q.trim();
+  const searchUrl = `https://ec.europa.eu/growth/tools-databases/cosing/index.cfm?fuseaction=search.results&search_term=${encodeURIComponent(term)}&search_wtype=INCI&submit=Search`;
+
+  try {
+    const response = await fetch(searchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Referer': 'https://ec.europa.eu/growth/tools-databases/cosing/',
+      },
+    });
+
+    if (!response.ok) {
+      return res.json({ results: [], error: `HTTP ${response.status}`, search_url: searchUrl });
+    }
+
+    const html = await response.text();
+    const results = parseCosIngResults(html);
+    res.json({ results, search_url: searchUrl, error: null });
+  } catch (err) {
+    res.json({ results: [], error: err.message, search_url: searchUrl });
+  }
+});
+
+function parseCosIngResults(html) {
+  const results = [];
+  const rowRegex = /<tr[^>]*>([\s\S]*?)<\/tr>/gi;
+  let match;
+  while ((match = rowRegex.exec(html)) !== null) {
+    const rowContent = match[1];
+    if (/<th[\s>]/i.test(rowContent)) continue; // skip header rows
+    const cells = [];
+    const tdRegex = /<td[^>]*>([\s\S]*?)<\/td>/gi;
+    let td;
+    while ((td = tdRegex.exec(rowContent)) !== null) {
+      const text = td[1]
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
+        .replace(/&nbsp;/g, ' ').replace(/&#\d+;/g, '').replace(/\s+/g, ' ').trim();
+      cells.push(text);
+    }
+    const idMatch = rowContent.match(/\/details\/(\d+)/i);
+    if (cells.length >= 1 && cells[0] && cells[0].length > 1) {
+      results.push({
+        id: idMatch ? idMatch[1] : null,
+        inci_name: cells[0],
+        cas_no: cells[1] || '',
+        ec_no: cells[2] || '',
+        functions: cells[3] || '',
+        restrictions: cells[4] || '',
+      });
+    }
+  }
+  return results;
+}
+
+// ============================================================
 // API: SEARCH
 // ============================================================
 app.get('/api/search', (req, res) => {
