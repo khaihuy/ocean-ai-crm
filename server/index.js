@@ -238,7 +238,7 @@ app.post('/api/cosing/import', (req, res) => {
   const rows = req.body;
   if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'Body must be a non-empty array' });
   const insert = db.prepare(`
-    INSERT OR REPLACE INTO cosing_ingredients
+    INSERT OR IGNORE INTO cosing_ingredients
       (cosing_ref_no, inci_name, cas_no, ec_no, functions, annex, max_conc, origin, uv_range, sccs_assessment, sccs_ref, source, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `);
@@ -362,7 +362,7 @@ app.post('/api/cosing/import-csv', (req, res) => {
   }
 
   const insert = db.prepare(`
-    INSERT OR REPLACE INTO cosing_ingredients
+    INSERT OR IGNORE INTO cosing_ingredients
       (cosing_ref_no, inci_name, cas_no, ec_no, functions, annex, max_conc, origin, uv_range, sccs_assessment, sccs_ref, source, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'cosing_csv', datetime('now'))
   `);
@@ -433,7 +433,7 @@ app.get('/api/cosing/auto-import', async (req, res) => {
   const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
   const insert = db.prepare(`
-    INSERT OR REPLACE INTO cosing_ingredients
+    INSERT OR IGNORE INTO cosing_ingredients
       (cosing_ref_no, inci_name, cas_no, ec_no, functions, annex, max_conc,
        origin, uv_range, sccs_assessment, sccs_ref, source, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'cosing_full', datetime('now'))

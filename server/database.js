@@ -135,6 +135,28 @@ if (!cols.includes('cosing_ref_no')) {
   db.prepare("UPDATE cosing_ingredients SET cosing_ref_no = '41309' WHERE inci_name = 'POLYSILICONE-15'").run();
 }
 
+// Migration: deduplicate cosing_ingredients and add unique index on inci_name
+{
+  const hasUnique = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_cosing_inci_unique'").get();
+  if (!hasUnique) {
+    // Keep the entry with cosing_ref_no (curated seed data) when there are duplicates,
+    // otherwise keep the lowest id (earliest inserted = seed data).
+    db.prepare(`
+      DELETE FROM cosing_ingredients
+      WHERE id NOT IN (
+        SELECT COALESCE(
+          MIN(CASE WHEN cosing_ref_no IS NOT NULL THEN id END),
+          MIN(id)
+        )
+        FROM cosing_ingredients
+        GROUP BY LOWER(TRIM(inci_name))
+      )
+    `).run();
+    db.prepare("CREATE UNIQUE INDEX idx_cosing_inci_unique ON cosing_ingredients(LOWER(TRIM(inci_name)))").run();
+    console.log('✅ CosIng dedup migration complete');
+  }
+}
+
 // ============================================================
 // SEED SAMPLE DATA
 // ============================================================
