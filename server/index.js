@@ -332,7 +332,11 @@ app.post('/api/cosing/import-csv', (req, res) => {
     return res.status(400).json({ error: 'Body must be { csv: "...", filename: "..." }' });
   }
 
-  const lines = csv.split(/\r?\n/).filter(l => l.trim());
+  let lines = csv.split(/\r?\n/).filter(l => l.trim());
+  // Skip leading metadata lines ("File creation date:", "sep=,", BOM, etc.)
+  while (lines.length > 0 && !lines[0].match(/cosing|inci|cas|function|restriction/i)) {
+    lines = lines.slice(1);
+  }
   if (lines.length < 2) return res.status(400).json({ error: 'CSV has no data rows' });
 
   const delim   = detectDelimiter(lines[0]);
@@ -410,9 +414,12 @@ app.get('/api/cosing/auto-import', async (req, res) => {
     const csv = await response.text();
     send({ status: 'parsing', msg: `Đã tải ${(csv.length / 1024).toFixed(0)} KB. Đang parse...` });
 
-    // Split lines, skip BOM and "sep=," header if present
+    // Split lines, skip metadata/BOM lines until real header row
     let lines = csv.split(/\r?\n/).filter(l => l.trim());
-    if (lines[0].startsWith('sep=') || lines[0].toLowerCase() === 'sep=,') lines = lines.slice(1);
+    // Skip any leading non-data lines: "File creation date:", "sep=,", BOM, etc.
+    while (lines.length > 0 && !lines[0].match(/cosing|inci|cas|function|restriction/i)) {
+      lines = lines.slice(1);
+    }
     if (lines.length < 2) throw new Error('CSV không có dữ liệu');
 
     const delim   = detectDelimiter(lines[0]);
