@@ -984,7 +984,7 @@ function cosingCard(r, idx) {
       </div>
       ${r.sccs_assessment ? `
         <div style="margin-top:14px;padding:14px;background:var(--primary-light);border-radius:8px">
-          <div class="fs-12 fw-600 text-primary" style="margin-bottom:6px">Đánh giá an toàn (SCCS/SCCNFP)</div>
+          <div class="fs-12 fw-600 text-primary" style="margin-bottom:6px">${r.sccs_ref && r.sccs_ref.startsWith('SCCS') ? 'Đánh giá an toàn (SCCS/SCCNFP)' : 'Mô tả hóa học / Đánh giá'}</div>
           <p class="fs-13" style="line-height:1.6;margin:0">${r.sccs_assessment}</p>
         </div>` : ''}
       <div style="margin-top:12px">

@@ -309,9 +309,10 @@ function mapHeaders(headers) {
     if (/maximum_concentration|max_conc|^conc/.test(n)) return 'max_conc';
     // Annex / Restriction / Regulation
     if (/^regulation$|^restriction$|^annex$/.test(n)) return 'annex_raw';
-    // SCCS
+    // SCCS / Description — "Chem/IUPAC Name / Description" from Fragrance Inventory
     if (/sccs_opinion|sccs_ref/.test(n)) return 'sccs_ref';
     if (/sccs|assessment/.test(n)) return 'sccs_assessment';
+    if (/chem.*iupac|iupac.*name|^description$/.test(n)) return 'sccs_assessment';
     // Origin / UV (custom CSVs)
     if (/origin/.test(n)) return 'origin';
     if (/uv_range|uv_filter/.test(n)) return 'uv_range';
