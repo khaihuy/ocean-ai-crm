@@ -1221,8 +1221,8 @@ function cosingCard(r, idx) {
     ? `https://ec.europa.eu/growth/tools-databases/cosing/details/${r.cosing_ref_no}`
     : `https://ec.europa.eu/growth/tools-databases/cosing/`;
 
-  return `<div class="card mb-8" style="padding:16px">
-    <div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleCosing(${idx}, ${JSON.stringify(r.inci_name)})">
+  return `<div class="card mb-8" style="padding:16px" id="card-${idx}" data-inci="${encodeURIComponent(r.inci_name)}">
+    <div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleCosing(${idx})">
       <div>
         <span class="fw-600" style="font-size:15px">${r.inci_name}</span>
         <span class="fs-12 text-gray" style="margin-left:10px">CAS: ${r.cas_no || '—'}</span>
@@ -1311,9 +1311,10 @@ function renderCountryRegs(regs) {
   </div>`;
 }
 
-async function toggleCosing(idx, inciName) {
+async function toggleCosing(idx) {
   const el = document.getElementById('det-' + idx);
   const arr = document.getElementById('arr-' + idx);
+  const inciName = decodeURIComponent(document.getElementById('card-' + idx)?.dataset?.inci || '');
   const open = el.style.display !== 'none';
   el.style.display = open ? 'none' : 'block';
   arr.style.transform = open ? '' : 'rotate(180deg)';
