@@ -464,9 +464,26 @@ function renderSearch() {
             </button>
           </div>
         </div>
-        <input type="text" id="cosingInput" placeholder="Nhập tên thành phần INCI (vd: Polysilicone-15, Titanium Dioxide, Retinol...)"
-          style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid var(--primary);font-size:14px;outline:none"
-          oninput="scheduleCosingSearch(this.value)">
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+          <button id="btnSingle" onclick="setSearchMode('single')" class="btn btn-primary btn-sm" style="font-size:12px">Tìm 1 thành phần</button>
+          <button id="btnBatch" onclick="setSearchMode('batch')" class="btn btn-outline btn-sm" style="font-size:12px">Tìm nhiều (danh sách)</button>
+        </div>
+        <div id="singleMode">
+          <input type="text" id="cosingInput" placeholder="Nhập tên thành phần INCI (vd: Polysilicone-15, Titanium Dioxide, Retinol...)"
+            style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid var(--primary);font-size:14px;outline:none"
+            oninput="scheduleCosingSearch(this.value)">
+        </div>
+        <div id="batchMode" style="display:none">
+          <textarea id="batchInput" placeholder="Dán danh sách thành phần, mỗi dòng 1 tên (hoặc phân cách bằng dấu phẩy)&#10;Ví dụ:&#10;Niacinamide&#10;Glycerin&#10;Phenoxyethanol"
+            rows="5" style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid var(--primary);font-size:13px;outline:none;resize:vertical;font-family:inherit"></textarea>
+          <div style="margin-top:8px;display:flex;gap:8px;align-items:center">
+            <button class="btn btn-primary" onclick="doBatchSearch()" style="font-size:13px">Tìm kiếm tất cả</button>
+            <label style="font-size:12px;color:var(--gray);cursor:pointer">
+              hoặc <input type="file" accept=".txt,.csv" style="display:none" onchange="loadBatchFile(this)">
+              <span style="color:var(--primary);text-decoration:underline" onclick="this.previousElementSibling.click()">tải file .txt / .csv</span>
+            </label>
+          </div>
+        </div>
         <div id="cosingStatus" class="fs-13 text-gray mt-8"></div>
       </div>
       <div id="cosingImportPanel" style="display:none" class="card mb-16">
@@ -899,6 +916,60 @@ function scheduleCosingSearch(q) {
   cosingTimer = setTimeout(() => doCosingSearch(q), 300);
 }
 
+function setSearchMode(mode) {
+  document.getElementById('singleMode').style.display = mode === 'single' ? '' : 'none';
+  document.getElementById('batchMode').style.display  = mode === 'batch'  ? '' : 'none';
+  document.getElementById('btnSingle').className = mode === 'single' ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+  document.getElementById('btnBatch').className  = mode === 'batch'  ? 'btn btn-primary btn-sm' : 'btn btn-outline btn-sm';
+  document.getElementById('btnSingle').style.fontSize = '12px';
+  document.getElementById('btnBatch').style.fontSize  = '12px';
+  document.getElementById('cosingResults').innerHTML = '';
+  document.getElementById('cosingStatus').innerHTML  = '';
+}
+
+function loadBatchFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('batchInput').value = e.target.result;
+  };
+  reader.readAsText(file);
+}
+
+async function doBatchSearch() {
+  const raw = document.getElementById('batchInput').value.trim();
+  if (!raw) return;
+  // Split by newline or comma, clean up
+  const names = raw.split(/[\n,]+/).map(s => s.trim()).filter(Boolean);
+  if (!names.length) return;
+
+  const statusEl = document.getElementById('cosingStatus');
+  const resultsEl = document.getElementById('cosingResults');
+  statusEl.innerHTML = `<span class="text-gray">Đang tìm ${names.length} thành phần...</span>`;
+  resultsEl.innerHTML = '';
+
+  // Fetch all ingredients matching each name
+  const allResults = [];
+  for (const name of names) {
+    try {
+      const resp = await fetch(`/api/cosing/search?q=${encodeURIComponent(name)}&limit=3`);
+      const rows = await resp.json();
+      if (rows.length) allResults.push(...rows);
+      else allResults.push({ _notFound: name });
+    } catch(e) { /* skip */ }
+  }
+
+  const found = allResults.filter(r => !r._notFound);
+  const missing = allResults.filter(r => r._notFound).map(r => r._notFound);
+
+  statusEl.innerHTML = `Tìm thấy <b>${found.length}</b> kết quả cho ${names.length} thành phần`
+    + (missing.length ? ` · <span style="color:var(--danger)">Không tìm thấy: ${missing.join(', ')}</span>` : '')
+    + ` · Nguồn: Cosing EU (SQLite)`;
+
+  resultsEl.innerHTML = found.map((r, i) => cosingCard(r, i)).join('');
+}
+
 async function doCosingSearch(q) {
   const statusEl = document.getElementById('cosingStatus');
   const resultsEl = document.getElementById('cosingResults');
@@ -946,7 +1017,7 @@ function cosingCard(r, idx) {
     : `https://ec.europa.eu/growth/tools-databases/cosing/`;
 
   return `<div class="card mb-8" style="padding:16px">
-    <div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleCosing(${idx})">
+    <div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleCosing(${idx}, ${JSON.stringify(r.inci_name)})">
       <div>
         <span class="fw-600" style="font-size:15px">${r.inci_name}</span>
         <span class="fs-12 text-gray" style="margin-left:10px">CAS: ${r.cas_no || '—'}</span>
@@ -987,6 +1058,7 @@ function cosingCard(r, idx) {
           <div class="fs-12 fw-600 text-primary" style="margin-bottom:6px">${r.sccs_ref && r.sccs_ref.startsWith('SCCS') ? 'Đánh giá an toàn (SCCS/SCCNFP)' : 'Mô tả hóa học / Đánh giá'}</div>
           <p class="fs-13" style="line-height:1.6;margin:0">${r.sccs_assessment}</p>
         </div>` : ''}
+      <div id="creg-${idx}" style="margin-top:14px"></div>
       <div style="margin-top:12px">
         <a href="${cosUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Xác minh trên CosIng EU &rarr;</a>
       </div>
@@ -994,12 +1066,62 @@ function cosingCard(r, idx) {
   </div>`;
 }
 
-function toggleCosing(idx) {
+const CREG_FLAG = { JP:'🇯🇵', KR:'🇰🇷', CN:'🇨🇳', US:'🇺🇸', VN:'🇻🇳' };
+const CREG_NAME = { JP:'Nhật Bản', KR:'Hàn Quốc', CN:'Trung Quốc', US:'Hoa Kỳ', VN:'Việt Nam' };
+const CREG_STATUS_LABEL = {
+  allowed:      { t:'Cho phép',         color:'#16a34a' },
+  restricted:   { t:'Hạn chế',          color:'#d97706' },
+  prohibited:   { t:'Bị cấm',           color:'#dc2626' },
+  not_approved: { t:'Chưa phê duyệt',   color:'#6b7280' },
+  pending:      { t:'Đang chờ duyệt',   color:'#7c3aed' },
+  not_listed:   { t:'Chưa có quy định', color:'#9ca3af' },
+};
+
+function renderCountryRegs(regs) {
+  if (!regs.length) return '';
+  const order = ['JP','KR','CN','US','VN'];
+  const map = {};
+  for (const r of regs) map[r.country] = r;
+  const rows = order.filter(c => map[c]).map(c => {
+    const r = map[c];
+    const st = CREG_STATUS_LABEL[r.status] || { t: r.status, color: '#6b7280' };
+    return `<tr>
+      <td style="padding:5px 10px;white-space:nowrap">${CREG_FLAG[c]} ${CREG_NAME[c]}</td>
+      <td style="padding:5px 10px"><span style="color:${st.color};font-weight:600;font-size:12px">${st.t}</span></td>
+      <td style="padding:5px 10px;font-size:12px;font-weight:600;color:var(--primary)">${r.max_conc || '—'}</td>
+      <td style="padding:5px 10px;font-size:11px;color:var(--gray)">${r.conditions || ''}</td>
+    </tr>`;
+  }).join('');
+  return `<div style="margin-top:14px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+    <div class="fs-12 fw-600" style="padding:8px 12px;background:var(--bg-secondary);border-bottom:1px solid var(--border)">Quy định quốc tế</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="background:var(--bg-secondary)">
+        <th style="padding:5px 10px;text-align:left;font-size:11px;color:var(--gray);font-weight:600">Quốc gia</th>
+        <th style="padding:5px 10px;text-align:left;font-size:11px;color:var(--gray);font-weight:600">Trạng thái</th>
+        <th style="padding:5px 10px;text-align:left;font-size:11px;color:var(--gray);font-weight:600">Nồng độ tối đa</th>
+        <th style="padding:5px 10px;text-align:left;font-size:11px;color:var(--gray);font-weight:600">Điều kiện</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+  </div>`;
+}
+
+async function toggleCosing(idx, inciName) {
   const el = document.getElementById('det-' + idx);
   const arr = document.getElementById('arr-' + idx);
   const open = el.style.display !== 'none';
   el.style.display = open ? 'none' : 'block';
   arr.style.transform = open ? '' : 'rotate(180deg)';
+  if (!open && inciName) {
+    const cregEl = document.getElementById('creg-' + idx);
+    if (cregEl && !cregEl.dataset.loaded) {
+      cregEl.dataset.loaded = '1';
+      try {
+        const data = await fetch(`/api/country-regs?inci=${encodeURIComponent(inciName)}`).then(r => r.json());
+        cregEl.innerHTML = renderCountryRegs(data);
+      } catch(e) { /* silently fail */ }
+    }
+  }
 }
 
 // Load DB stats when CosIng tab is active

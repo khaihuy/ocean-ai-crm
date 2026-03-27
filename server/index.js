@@ -233,6 +233,36 @@ app.get('/api/cosing/stats', (req, res) => {
   });
 });
 
+// GET /api/country-regs?inci=POLYSILICONE-15
+app.get('/api/country-regs', (req, res) => {
+  const { inci } = req.query;
+  if (!inci) return res.json([]);
+  const rows = db.prepare(`
+    SELECT country, status, max_conc, conditions, source_ref
+    FROM country_regs
+    WHERE LOWER(TRIM(inci_name)) = LOWER(TRIM(?))
+    ORDER BY country
+  `).all(inci);
+  res.json(rows);
+});
+
+// POST /api/country-regs/batch — { incis: ["NAME1", "NAME2", ...] }
+app.post('/api/country-regs/batch', (req, res) => {
+  const { incis } = req.body;
+  if (!Array.isArray(incis) || incis.length === 0) return res.json({});
+  const result = {};
+  const stmt = db.prepare(`
+    SELECT country, status, max_conc, conditions, source_ref
+    FROM country_regs
+    WHERE LOWER(TRIM(inci_name)) = LOWER(TRIM(?))
+    ORDER BY country
+  `);
+  for (const inci of incis) {
+    result[inci] = stmt.all(inci);
+  }
+  res.json(result);
+});
+
 app.post('/api/cosing/import', (req, res) => {
   // Accept array of ingredient objects (full field names)
   const rows = req.body;

@@ -111,7 +111,21 @@ db.exec(`
     updated_at TEXT DEFAULT (datetime('now'))
   );
 
+  -- International cosmetic regulations by country
+  CREATE TABLE IF NOT EXISTS country_regs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inci_name TEXT NOT NULL COLLATE NOCASE,
+    country TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'not_listed',
+    max_conc TEXT,
+    conditions TEXT,
+    source_ref TEXT,
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
   -- Indexes
+  CREATE INDEX IF NOT EXISTS idx_creg_inci ON country_regs(LOWER(inci_name));
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_creg_unique ON country_regs(LOWER(TRIM(inci_name)), country);
   CREATE INDEX IF NOT EXISTS idx_clients_country ON clients(country);
   CREATE INDEX IF NOT EXISTS idx_clients_status ON clients(status);
   CREATE INDEX IF NOT EXISTS idx_contracts_client ON contracts(client_id);
@@ -213,6 +227,25 @@ if (cosingCount === 0) {
   });
   seedTx();
   console.log(`✅ CosIng database seeded with ${seed.length} ingredients`);
+}
+
+// ============================================================
+// SEED COUNTRY REGULATIONS
+// ============================================================
+const cregCount = db.prepare('SELECT COUNT(*) as count FROM country_regs').get().count;
+if (cregCount === 0) {
+  const cregSeed = require('./country-regs-seed');
+  const insertCreg = db.prepare(`
+    INSERT OR IGNORE INTO country_regs (inci_name, country, status, max_conc, conditions, source_ref)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  const cregTx = db.transaction(() => {
+    for (const r of cregSeed) {
+      insertCreg.run(r.i, r.c, r.s, r.m || null, r.n || null, r.r || null);
+    }
+  });
+  cregTx();
+  console.log(`✅ Country regulations seeded with ${cregSeed.length} entries`);
 }
 
 module.exports = db;
