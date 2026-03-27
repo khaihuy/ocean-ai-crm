@@ -213,17 +213,77 @@ app.get('/api/reference/services', (req, res) => {
 // ============================================================
 // API: COSING INGREDIENTS
 // ============================================================
+
+// In-memory cache for fuzzy search
+let _inciNamesCache = null;
+function getInciNamesCache() {
+  if (!_inciNamesCache) {
+    _inciNamesCache = db.prepare('SELECT inci_name FROM cosing_ingredients').all().map(r => r.inci_name);
+  }
+  return _inciNamesCache;
+}
+function invalidateInciCache() { _inciNamesCache = null; }
+
+function levenshtein(a, b) {
+  const la = a.length, lb = b.length;
+  if (la === 0) return lb;
+  if (lb === 0) return la;
+  // Use two rows to save memory
+  let prev = Array.from({ length: lb + 1 }, (_, i) => i);
+  let curr = new Array(lb + 1);
+  for (let i = 1; i <= la; i++) {
+    curr[0] = i;
+    for (let j = 1; j <= lb; j++) {
+      curr[j] = a[i - 1] === b[j - 1]
+        ? prev[j - 1]
+        : 1 + Math.min(prev[j - 1], prev[j], curr[j - 1]);
+    }
+    [prev, curr] = [curr, prev];
+  }
+  return prev[lb];
+}
+
+function fuzzySearchNames(query, maxDist) {
+  const q = query.toLowerCase();
+  const names = getInciNamesCache();
+  const results = [];
+  for (const name of names) {
+    const n = name.toLowerCase();
+    if (Math.abs(n.length - q.length) > maxDist + 1) continue;
+    const dist = levenshtein(q, n);
+    if (dist <= maxDist) results.push({ name, dist });
+  }
+  results.sort((a, b) => a.dist - b.dist);
+  return results.slice(0, 8).map(r => r.name);
+}
+
 app.get('/api/cosing/search', (req, res) => {
   const { q, annex, limit: lim } = req.query;
   if (!q || q.trim().length < 2) return res.json([]);
-  const term = `%${q.trim()}%`;
+  const trimmed = q.trim();
+  const term = `%${trimmed}%`;
   const maxRows = Math.min(parseInt(lim) || 50, 200);
   let sql = `SELECT * FROM cosing_ingredients WHERE (inci_name LIKE ? OR cas_no LIKE ? OR functions LIKE ?)`;
   const params = [term, term, term];
   if (annex && annex !== 'all') { sql += ' AND annex = ?'; params.push(annex); }
   sql += ' ORDER BY inci_name ASC LIMIT ?';
   params.push(maxRows);
-  res.json(db.prepare(sql).all(...params));
+  const results = db.prepare(sql).all(...params);
+
+  // Fuzzy fallback when no exact/LIKE match
+  if (results.length === 0 && trimmed.length >= 3) {
+    const maxDist = Math.max(1, Math.floor(trimmed.length / 4));
+    const fuzzyNames = fuzzySearchNames(trimmed, maxDist);
+    if (fuzzyNames.length > 0) {
+      const placeholders = fuzzyNames.map(() => '?').join(',');
+      const fuzzyResults = db.prepare(
+        `SELECT * FROM cosing_ingredients WHERE inci_name IN (${placeholders}) ORDER BY inci_name ASC`
+      ).all(...fuzzyNames);
+      return res.json(fuzzyResults.map(r => ({ ...r, _fuzzy: true, _query: trimmed })));
+    }
+  }
+
+  res.json(results);
 });
 
 app.get('/api/cosing/stats', (req, res) => {
@@ -423,6 +483,7 @@ app.post('/api/cosing/import-csv', (req, res) => {
   });
   tx();
 
+  invalidateInciCache();
   const total = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
   res.json({ imported, skipped, total_in_db: total });
 });
@@ -521,6 +582,7 @@ app.get('/api/cosing/auto-import', async (req, res) => {
              msg: `${label}: ${fileImported} thành phần. Tổng: ${totalImported.toLocaleString()}` });
     }
 
+    invalidateInciCache();
     const total = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
     send({ status: 'done', imported: totalImported, skipped: totalSkipped, total_in_db: total,
            msg: `Hoàn thành! ${totalImported.toLocaleString()} thành phần đã import. Tổng trong DB: ${total.toLocaleString()}` });
