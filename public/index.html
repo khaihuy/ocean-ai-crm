@@ -446,29 +446,46 @@ function renderSearch() {
 
     <div id="panel-cosing" style="display:${searchTab==='cosing'?'block':'none'}">
       <div class="card mb-16">
-        <div class="flex justify-between items-center" style="margin-bottom:8px">
+        <!-- Header: title + counts + refs + action buttons -->
+        <div class="flex justify-between items-center" style="margin-bottom:10px">
           <div class="flex items-center gap-8">
             <svg width="16" height="16" fill="none" stroke="var(--primary)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
             <span class="fw-600 text-primary fs-13">Tra cứu thành phần mỹ phẩm</span>
           </div>
           <div class="flex items-center gap-8 flex-wrap">
-            <span id="cosingDbCount" class="fs-12 text-gray" title="Click 3 lần để mở Import" style="cursor:default" onclick="handleDbCountClick()"></span>
-            <span class="fs-12 text-gray">Tham chiếu:</span>
+            <span id="cosingDbCount" class="fs-12 text-gray"></span>
+            <span id="cdbTotalCount" class="fs-12 text-gray"></span>
             <a href="https://ec.europa.eu/growth/tools-databases/cosing/reference/annexes" target="_blank" rel="noopener" class="fs-12" style="color:var(--primary)">Annexes</a>
             <a href="https://ec.europa.eu/growth/tools-databases/cosing/reference/regulations" target="_blank" rel="noopener" class="fs-12" style="color:var(--primary)">Regulations</a>
-            <a href="https://ec.europa.eu/growth/tools-databases/cosing/reference/functions" target="_blank" rel="noopener" class="fs-12" style="color:var(--primary)">Functions</a>
-            <a href="https://ec.europa.eu/growth/tools-databases/cosing/reference/abbreviations" target="_blank" rel="noopener" class="fs-12" style="color:var(--primary)">Abbreviations</a>
+            <button class="btn btn-outline btn-sm" onclick="showCosingImport()" style="font-size:12px">
+              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              Import EU
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="toggleCdbUpload()" style="font-size:12px">⬆ Upload</button>
           </div>
         </div>
-        <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <!-- Search mode tabs -->
+        <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
           <button id="btnSingle" onclick="setSearchMode('single')" class="btn btn-primary btn-sm" style="font-size:12px">Tìm 1 thành phần</button>
           <button id="btnBatch" onclick="setSearchMode('batch')" class="btn btn-outline btn-sm" style="font-size:12px">Tìm nhiều (danh sách)</button>
         </div>
+        <!-- Source filter chips -->
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-bottom:8px">
+          <button id="sf-all" class="btn btn-primary btn-sm" onclick="setSourceFilter('all')" style="font-size:11px">Tất cả</button>
+          <button id="sf-eu"  class="btn btn-outline btn-sm" onclick="setSourceFilter('eu')"  style="font-size:11px">🇪🇺 EU CosIng</button>
+          <button id="sf-KR"  class="btn btn-outline btn-sm" onclick="setSourceFilter('KR')"  style="font-size:11px">🇰🇷 KR</button>
+          <button id="sf-JP"  class="btn btn-outline btn-sm" onclick="setSourceFilter('JP')"  style="font-size:11px">🇯🇵 JP</button>
+          <button id="sf-CN"  class="btn btn-outline btn-sm" onclick="setSourceFilter('CN')"  style="font-size:11px">🇨🇳 CN</button>
+          <button id="sf-US"  class="btn btn-outline btn-sm" onclick="setSourceFilter('US')"  style="font-size:11px">🇺🇸 US</button>
+          <button id="sf-VN"  class="btn btn-outline btn-sm" onclick="setSourceFilter('VN')"  style="font-size:11px">🇻🇳 VN</button>
+        </div>
+        <!-- Single mode input -->
         <div id="singleMode">
           <input type="text" id="cosingInput" placeholder="Nhập tên thành phần INCI (vd: Polysilicone-15, Titanium Dioxide, Retinol...)"
             style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid var(--primary);font-size:14px;outline:none"
             oninput="scheduleCosingSearch(this.value)">
         </div>
+        <!-- Batch mode input -->
         <div id="batchMode" style="display:none">
           <textarea id="batchInput" placeholder="Dán danh sách thành phần, mỗi dòng 1 tên (hoặc phân cách bằng dấu phẩy)&#10;Ví dụ:&#10;Niacinamide&#10;Glycerin&#10;Phenoxyethanol"
             rows="5" style="width:100%;padding:12px 16px;border-radius:10px;border:2px solid var(--primary);font-size:13px;outline:none;resize:vertical;font-family:inherit"></textarea>
@@ -482,10 +499,13 @@ function renderSearch() {
         </div>
         <div id="cosingStatus" class="fs-13 text-gray mt-8"></div>
       </div>
-      <div id="cosingImportPanel" style="display:none" class="card mb-16">
-        <div class="fw-600 mb-12">Import thành phần (CosIng EU)</div>
 
-        <!-- Auto-import button -->
+      <!-- Import EU panel (collapsible) -->
+      <div id="cosingImportPanel" style="display:none" class="card mb-16">
+        <div class="flex justify-between items-center mb-12">
+          <div class="fw-600">Import thành phần (CosIng EU)</div>
+          <button onclick="showCosingImport()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--gray)">&times;</button>
+        </div>
         <div style="margin-bottom:16px;padding:14px;background:var(--primary-light);border-radius:10px">
           <div class="fw-600 fs-13 text-primary mb-8">Tự động import tất cả thành phần CosIng EU</div>
           <div class="fs-12 text-gray mb-10">Tải toàn bộ Fragrance Inventory + Annex II–VI từ Open Beauty Facts (GitHub) — không cần download file thủ công.</div>
@@ -500,11 +520,7 @@ function renderSearch() {
             <div id="autoImportMsg" class="fs-12 text-gray mt-6"></div>
           </div>
         </div>
-
-        <div style="font-size:12px;color:var(--gray);margin-bottom:12px">
-          — hoặc upload file CSV thủ công —
-        </div>
-
+        <div style="font-size:12px;color:var(--gray);margin-bottom:12px">— hoặc upload file CSV thủ công —</div>
         <div style="font-size:13px;color:var(--gray);margin-bottom:12px;line-height:1.6">
           <strong>Tải CSV từ CosIng EU:</strong>
           <a href="https://ec.europa.eu/growth/tools-databases/cosing/" target="_blank" rel="noopener" style="color:var(--primary)">CosIng EU →</a>
@@ -530,76 +546,50 @@ function renderSearch() {
         </div>
         <div id="csvResult" style="display:none;margin-top:12px"></div>
       </div>
-      <div id="cosingResults"></div>
 
-      <!-- Multi-country ingredient DB panel -->
-      <div id="countryDbPanel" style="margin-top:24px;border-top:2px solid var(--border);padding-top:20px">
+      <!-- Upload quốc gia panel (collapsible) -->
+      <div id="cdbUploadArea" style="display:none" class="card mb-16">
         <div class="flex justify-between items-center mb-12">
-          <div>
-            <span class="fw-600" style="font-size:15px">Cơ sở dữ liệu theo quốc gia</span>
-            <span class="fs-12 text-gray" style="margin-left:8px">(upload từ cơ quan quản lý)</span>
-          </div>
-          <button class="btn btn-primary btn-sm" onclick="toggleCdbUpload()" style="font-size:12px">⬆ Upload bảng thành phần</button>
+          <div class="fw-600">Upload bảng thành phần theo quốc gia</div>
+          <button onclick="toggleCdbUpload()" style="background:none;border:none;cursor:pointer;font-size:18px;color:var(--gray)">&times;</button>
         </div>
-
-        <!-- Stats per country -->
         <div id="cdbStats" class="fs-12 text-gray mb-12">Chưa có dữ liệu</div>
-
-        <!-- Upload form -->
-        <div id="cdbUploadArea" style="display:none;margin-bottom:16px;padding:16px;background:var(--bg-secondary);border-radius:10px;border:1px solid var(--border)">
-          <div class="fs-13 fw-600 mb-10">Upload bảng thành phần</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
-            <div>
-              <div class="fs-12 text-gray mb-4">Quốc gia <span style="color:var(--danger)">*</span></div>
-              <select id="cdbCountry" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);font-size:13px">
-                <option value="">-- Chọn quốc gia --</option>
-                <option value="KR">🇰🇷 Hàn Quốc (MFDS)</option>
-                <option value="JP">🇯🇵 Nhật Bản (MHLW)</option>
-                <option value="CN">🇨🇳 Trung Quốc (NMPA)</option>
-                <option value="US">🇺🇸 Hoa Kỳ (FDA)</option>
-                <option value="VN">🇻🇳 Việt Nam (BYT)</option>
-                <option value="ASEAN">🌏 ASEAN</option>
-                <option value="OTHER">🌐 Khác</option>
-              </select>
-            </div>
-            <div>
-              <div class="fs-12 text-gray mb-4">File CSV / TSV / TXT <span style="color:var(--danger)">*</span></div>
-              <div style="display:flex;gap:8px;align-items:center">
-                <input type="file" id="cdbFileInput" accept=".csv,.tsv,.txt,.xls,.xlsx" style="display:none" onchange="handleCdbFile(this)">
-                <button class="btn btn-outline btn-sm" onclick="document.getElementById('cdbFileInput').click()" style="font-size:12px;white-space:nowrap">Chọn file</button>
-                <span class="fs-12 text-gray" id="cdbFileName" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Chưa chọn</span>
-              </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+          <div>
+            <div class="fs-12 text-gray mb-4">Quốc gia <span style="color:var(--danger)">*</span></div>
+            <select id="cdbCountry" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid var(--border);font-size:13px">
+              <option value="">-- Chọn quốc gia --</option>
+              <option value="KR">🇰🇷 Hàn Quốc (MFDS)</option>
+              <option value="JP">🇯🇵 Nhật Bản (MHLW)</option>
+              <option value="CN">🇨🇳 Trung Quốc (NMPA)</option>
+              <option value="US">🇺🇸 Hoa Kỳ (FDA)</option>
+              <option value="VN">🇻🇳 Việt Nam (BYT)</option>
+              <option value="ASEAN">🌏 ASEAN</option>
+              <option value="OTHER">🌐 Khác</option>
+            </select>
+          </div>
+          <div>
+            <div class="fs-12 text-gray mb-4">File CSV / TSV / TXT <span style="color:var(--danger)">*</span></div>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="file" id="cdbFileInput" accept=".csv,.tsv,.txt,.xls,.xlsx" style="display:none" onchange="handleCdbFile(this)">
+              <button class="btn btn-outline btn-sm" onclick="document.getElementById('cdbFileInput').click()" style="font-size:12px;white-space:nowrap">Chọn file</button>
+              <span class="fs-12 text-gray" id="cdbFileName" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">Chưa chọn</span>
             </div>
           </div>
-          <div class="fs-12 text-gray mb-10">
-            Cột tên thành phần phải có header: <b>INCI Name</b> hoặc tên địa phương
-            (성분명, 成分名, 原料名, tên thành phần...). Hỗ trợ UTF-8.
-          </div>
-          <div id="cdbUploadResult" style="font-size:13px"></div>
-          <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
-            <div class="fs-12 fw-600 text-gray mb-6">Quản lý dữ liệu đã tải</div>
-            <div id="cdbManageList" class="fs-12"></div>
-          </div>
         </div>
-
-        <!-- Search -->
-        <div style="display:flex;gap:8px;margin-bottom:8px">
-          <select id="cdbSearchCountry" style="padding:8px 10px;border-radius:8px;border:1px solid var(--border);font-size:13px;min-width:160px">
-            <option value="ALL">🌐 Tất cả quốc gia</option>
-            <option value="KR">🇰🇷 Hàn Quốc</option>
-            <option value="JP">🇯🇵 Nhật Bản</option>
-            <option value="CN">🇨🇳 Trung Quốc</option>
-            <option value="US">🇺🇸 Hoa Kỳ</option>
-            <option value="VN">🇻🇳 Việt Nam</option>
-            <option value="ASEAN">🌏 ASEAN</option>
-          </select>
-          <input type="text" id="cdbSearchInput" placeholder="Tìm theo tên INCI hoặc tên địa phương..."
-            style="flex:1;padding:8px 14px;border-radius:8px;border:1px solid var(--border);font-size:13px;outline:none"
-            oninput="scheduleCdbSearch(this.value)">
+        <div class="fs-12 text-gray mb-10">
+          Cột tên thành phần phải có header: <b>INCI Name</b> hoặc tên địa phương
+          (성분명, 成分名, 原料名, tên thành phần...). Hỗ trợ UTF-8.
         </div>
-        <div id="cdbSearchStatus" class="fs-12 text-gray mb-8"></div>
-        <div id="cdbResults"></div>
+        <div id="cdbUploadResult" style="font-size:13px"></div>
+        <div style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+          <div class="fs-12 fw-600 text-gray mb-6">Quản lý dữ liệu đã tải</div>
+          <div id="cdbManageList" class="fs-12"></div>
+        </div>
       </div>
+
+      <!-- Unified results -->
+      <div id="cosingResults"></div>
     </div>`;
 }
 
@@ -613,7 +603,33 @@ const CDB_STATUS_LABEL  = { allowed:'Cho phép', restricted:'Hạn chế', prohi
 function toggleCdbUpload() {
   const el = document.getElementById('cdbUploadArea');
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
-  if (el.style.display === 'block') renderCdbManage();
+  if (el.style.display === 'block') { loadCdbStats(); renderCdbManage(); }
+}
+
+// Source filter for unified results
+let _allResults = { eu: [], country: [] };
+let _sourceFilter = 'all';
+
+function setSourceFilter(src) {
+  _sourceFilter = src;
+  ['all','eu','KR','JP','CN','US','VN'].forEach(s => {
+    const b = document.getElementById('sf-' + s);
+    if (b) b.className = 'btn btn-sm ' + (s === src ? 'btn-primary' : 'btn-outline');
+  });
+  renderUnifiedResults();
+}
+
+function renderUnifiedResults() {
+  const resultsEl = document.getElementById('cosingResults');
+  const euList  = (_sourceFilter === 'all' || _sourceFilter === 'eu') ? _allResults.eu : [];
+  const ctrList = _sourceFilter === 'eu' ? [] :
+    _sourceFilter === 'all' ? _allResults.country :
+    _allResults.country.filter(r => r.country === _sourceFilter);
+  if (!euList.length && !ctrList.length && (_allResults.eu.length + _allResults.country.length > 0)) {
+    resultsEl.innerHTML = `<div class="card" style="text-align:center;padding:20px"><div class="fs-13 text-gray">Không có kết quả cho nguồn đã chọn</div></div>`;
+    return;
+  }
+  resultsEl.innerHTML = euList.map((r, i) => cosingCard(r, i)).join('') + ctrList.map(r => cdbCard(r)).join('');
 }
 
 let cdbTimer = null;
@@ -671,8 +687,11 @@ async function loadCdbStats() {
   try {
     const rows = await fetch('/api/country-db/stats').then(r => r.json());
     const el = document.getElementById('cdbStats');
+    const totalEl = document.getElementById('cdbTotalCount');
+    const total = rows.reduce((s, r) => s + r.count, 0);
+    if (totalEl && total > 0) totalEl.textContent = `· ${total.toLocaleString()} thành phần quốc gia`;
     if (!el) return;
-    if (!rows.length) { el.textContent = 'Chưa có dữ liệu — bấm "Upload bảng thành phần" để thêm'; return; }
+    if (!rows.length) { el.textContent = 'Chưa có dữ liệu'; return; }
     el.innerHTML = rows.map(r => `<span style="margin-right:12px">${CDB_FLAG[r.country]||'🌐'} ${CDB_NAME[r.country]||r.country}: <b>${r.count.toLocaleString()}</b></span>`).join('');
   } catch(e) {}
 }
@@ -730,7 +749,8 @@ async function confirmClearCountry(country) {
   if (!confirm(`Xóa toàn bộ dữ liệu ${CDB_FLAG[country]} ${name}?`)) return;
   await fetch(`/api/country-db/clear?country=${country}`, { method: 'DELETE' });
   loadCdbStats(); renderCdbManage();
-  document.getElementById('cdbResults').innerHTML = '';
+  _allResults.country = _allResults.country.filter(r => r.country !== country);
+  renderUnifiedResults();
 }
 
 // backward-compat alias used by loadCosingStats
@@ -1171,43 +1191,43 @@ async function doBatchSearch() {
 async function doCosingSearch(q) {
   const statusEl = document.getElementById('cosingStatus');
   const resultsEl = document.getElementById('cosingResults');
-  const verifyUrl = `https://ec.europa.eu/growth/tools-databases/cosing/`;
-
   statusEl.innerHTML = `<span class="text-gray">Đang tìm kiếm...</span>`;
   resultsEl.innerHTML = '';
+  _allResults = { eu: [], country: [] };
 
-  let results;
-  try {
-    const resp = await fetch(`/api/cosing/search?q=${encodeURIComponent(q)}`);
-    results = await resp.json();
-  } catch(e) {
-    statusEl.textContent = '';
-    resultsEl.innerHTML = `<div class="card" style="text-align:center;padding:32px"><div class="fs-13 text-gray">Lỗi kết nối server</div></div>`;
-    return;
-  }
+  const [euRes, ctrRes] = await Promise.allSettled([
+    fetch(`/api/cosing/search?q=${encodeURIComponent(q)}`).then(r => r.json()),
+    fetch(`/api/country-db/search?q=${encodeURIComponent(q)}&country=ALL`).then(r => r.json()),
+  ]);
+  if (euRes.status === 'fulfilled')  _allResults.eu      = euRes.value;
+  if (ctrRes.status === 'fulfilled') _allResults.country = ctrRes.value;
 
-  if (results.length === 0) {
+  const total = _allResults.eu.length + _allResults.country.length;
+
+  if (total === 0) {
     statusEl.textContent = '';
     resultsEl.innerHTML = `
       <div class="card" style="text-align:center;padding:32px">
         <div class="fs-13 text-gray" style="margin-bottom:12px">Không tìm thấy "<strong>${q}</strong>" trong cơ sở dữ liệu</div>
-        <a href="${verifyUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Tìm trực tiếp trên CosIng &rarr;</a>
+        <a href="https://ec.europa.eu/growth/tools-databases/cosing/" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Tìm trực tiếp trên CosIng &rarr;</a>
       </div>`;
     return;
   }
 
-  const isFuzzy = results[0] && results[0]._fuzzy;
+  const isFuzzy = _allResults.eu[0]?._fuzzy;
   if (isFuzzy) {
-    statusEl.innerHTML = `<span style="color:#b45309;font-weight:600">Không tìm thấy chính xác "<strong>${q}</strong>". Gợi ý tên gần nhất:</span>`;
+    statusEl.innerHTML = `<span style="color:#b45309;font-weight:600">Gợi ý tên gần nhất với "<strong>${q}</strong>":</span>`;
     resultsEl.innerHTML = `<div style="background:#fef9c3;border:1px solid #fde047;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:13px;color:#854d0e">
-      ✏️ Có thể bạn muốn tìm: ${results.map(r => `<b>${r.inci_name}</b>`).join(', ')}
-    </div>` + results.map((r, i) => cosingCard(r, i)).join('');
+      ✏️ Có thể bạn muốn tìm: ${_allResults.eu.map(r => `<b>${r.inci_name}</b>`).join(', ')}
+    </div>`;
+    resultsEl.innerHTML += _allResults.eu.map((r, i) => cosingCard(r, i)).join('');
   } else {
-    statusEl.innerHTML = `<span style="color:var(--success)">Tìm thấy ${results.length} thành phần</span>
-      <span class="text-gray" style="margin-left:12px">·
-        <a href="${verifyUrl}" target="_blank" rel="noopener" style="color:var(--primary)">Xác minh trên CosIng &rarr;</a>
-      </span>`;
-    resultsEl.innerHTML = results.map((r, i) => cosingCard(r, i)).join('');
+    const parts = [];
+    if (_allResults.eu.length)      parts.push(`EU CosIng: ${_allResults.eu.length}`);
+    if (_allResults.country.length) parts.push(`Quốc gia: ${_allResults.country.length}`);
+    statusEl.innerHTML = `<span style="color:var(--success)">Tìm thấy ${total} kết quả</span>
+      <span class="text-gray" style="margin-left:8px">(${parts.join(', ')})</span>`;
+    renderUnifiedResults();
   }
 }
 
@@ -1391,16 +1411,6 @@ function showCosingImport() {
   panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 }
 
-let _dbClickCount = 0, _dbClickTimer = null;
-function handleDbCountClick() {
-  _dbClickCount++;
-  clearTimeout(_dbClickTimer);
-  _dbClickTimer = setTimeout(() => { _dbClickCount = 0; }, 800);
-  if (_dbClickCount >= 3) {
-    _dbClickCount = 0;
-    showCosingImport();
-  }
-}
 
 function handleCsvDrop(e) {
   e.preventDefault();
