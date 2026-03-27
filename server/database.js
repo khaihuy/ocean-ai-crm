@@ -111,7 +111,42 @@ db.exec(`
     updated_at TEXT DEFAULT (datetime('now'))
   );
 
+  -- International cosmetic regulations by country
+  CREATE TABLE IF NOT EXISTS country_regs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inci_name TEXT NOT NULL COLLATE NOCASE,
+    country TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'not_listed',
+    max_conc TEXT,
+    conditions TEXT,
+    source_ref TEXT,
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  -- Multi-country cosmetic ingredient database (uploaded by user)
+  CREATE TABLE IF NOT EXISTS country_ingredients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    country TEXT NOT NULL,
+    inci_name TEXT,
+    local_name TEXT,
+    cas_no TEXT,
+    ec_no TEXT,
+    status TEXT DEFAULT 'allowed',
+    max_conc TEXT,
+    functions TEXT,
+    product_type TEXT,
+    conditions TEXT,
+    notes TEXT,
+    source TEXT DEFAULT 'user_upload',
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_cingr_country ON country_ingredients(country);
+  CREATE INDEX IF NOT EXISTS idx_cingr_inci ON country_ingredients(country, LOWER(inci_name));
+  CREATE INDEX IF NOT EXISTS idx_cingr_local ON country_ingredients(country, local_name);
+
   -- Indexes
+  CREATE INDEX IF NOT EXISTS idx_creg_inci ON country_regs(LOWER(inci_name));
+  CREATE UNIQUE INDEX IF NOT EXISTS idx_creg_unique ON country_regs(LOWER(TRIM(inci_name)), country);
   CREATE INDEX IF NOT EXISTS idx_clients_country ON clients(country);
   CREATE INDEX IF NOT EXISTS idx_clients_status ON clients(status);
   CREATE INDEX IF NOT EXISTS idx_contracts_client ON contracts(client_id);
@@ -124,6 +159,23 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_cosing_inci ON cosing_ingredients(inci_name);
   CREATE INDEX IF NOT EXISTS idx_cosing_cas ON cosing_ingredients(cas_no);
 `);
+
+// Migration: move any existing kr_ingredients rows into country_ingredients
+{
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r => r.name);
+  if (tables.includes('kr_ingredients')) {
+    const count = db.prepare('SELECT COUNT(*) as c FROM kr_ingredients').get().c;
+    if (count > 0) {
+      db.prepare(`
+        INSERT OR IGNORE INTO country_ingredients
+          (country, inci_name, local_name, cas_no, status, max_conc, functions, product_type, conditions, notes, source, updated_at)
+        SELECT 'KR', inci_name, kr_name, cas_no, status, max_conc, functions, product_type, conditions, notes, source, updated_at
+        FROM kr_ingredients
+      `).run();
+    }
+    db.prepare('DROP TABLE IF EXISTS kr_ingredients').run();
+  }
+}
 
 // ============================================================
 // MIGRATIONS — add columns to existing DBs
@@ -213,6 +265,25 @@ if (cosingCount === 0) {
   });
   seedTx();
   console.log(`✅ CosIng database seeded with ${seed.length} ingredients`);
+}
+
+// ============================================================
+// SEED COUNTRY REGULATIONS
+// ============================================================
+const cregCount = db.prepare('SELECT COUNT(*) as count FROM country_regs').get().count;
+if (cregCount === 0) {
+  const cregSeed = require('./country-regs-seed');
+  const insertCreg = db.prepare(`
+    INSERT OR IGNORE INTO country_regs (inci_name, country, status, max_conc, conditions, source_ref)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  const cregTx = db.transaction(() => {
+    for (const r of cregSeed) {
+      insertCreg.run(r.i, r.c, r.s, r.m || null, r.n || null, r.r || null);
+    }
+  });
+  cregTx();
+  console.log(`✅ Country regulations seeded with ${cregSeed.length} entries`);
 }
 
 module.exports = db;

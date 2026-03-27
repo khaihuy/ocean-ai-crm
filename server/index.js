@@ -233,6 +233,36 @@ app.get('/api/cosing/stats', (req, res) => {
   });
 });
 
+// GET /api/country-regs?inci=POLYSILICONE-15
+app.get('/api/country-regs', (req, res) => {
+  const { inci } = req.query;
+  if (!inci) return res.json([]);
+  const rows = db.prepare(`
+    SELECT country, status, max_conc, conditions, source_ref
+    FROM country_regs
+    WHERE LOWER(TRIM(inci_name)) = LOWER(TRIM(?))
+    ORDER BY country
+  `).all(inci);
+  res.json(rows);
+});
+
+// POST /api/country-regs/batch — { incis: ["NAME1", "NAME2", ...] }
+app.post('/api/country-regs/batch', (req, res) => {
+  const { incis } = req.body;
+  if (!Array.isArray(incis) || incis.length === 0) return res.json({});
+  const result = {};
+  const stmt = db.prepare(`
+    SELECT country, status, max_conc, conditions, source_ref
+    FROM country_regs
+    WHERE LOWER(TRIM(inci_name)) = LOWER(TRIM(?))
+    ORDER BY country
+  `);
+  for (const inci of incis) {
+    result[inci] = stmt.all(inci);
+  }
+  res.json(result);
+});
+
 app.post('/api/cosing/import', (req, res) => {
   // Accept array of ingredient objects (full field names)
   const rows = req.body;
@@ -499,6 +529,146 @@ app.get('/api/cosing/auto-import', async (req, res) => {
   }
 
   res.end();
+});
+
+// ============================================================
+// API: MULTI-COUNTRY INGREDIENT DATABASE
+// ============================================================
+
+// Column name mappings per country (local language → our field)
+const COUNTRY_HEADER_PATTERNS = {
+  KR: { local_name: /성분명|원료명|국문|korean_name|한국어/ },
+  JP: { local_name: /成分名|原料名|japanese_name|日本語/ },
+  CN: { local_name: /成分名称|原料名称|中文名|chinese_name/ },
+  VN: { local_name: /tên thành phần|tên nguyên liệu|vietnamese_name|tiếng việt/ },
+  US: { local_name: /common_name|trade_name/ },
+};
+
+function mapCountryHeader(h, country) {
+  const n = h.toLowerCase().replace(/[\s.\-\/\(\)]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  if (/^inci|^name$|^ingredient_name/.test(n)) return 'inci_name';
+  if (/^cas/.test(n)) return 'cas_no';
+  if (/^ec_no|^ec$|^ec_number/.test(n)) return 'ec_no';
+  if (/function|기능|효능|機能|功能/.test(n)) return 'functions';
+  if (/max|conc|농도|사용량|기준|最大|浓度|濃度/.test(n)) return 'max_conc';
+  if (/product.type|제형|제품|剤型|製品|产品类型/.test(n)) return 'product_type';
+  if (/status|허용|금지|restrict|許可|禁止|允许|禁止/.test(n)) return 'status';
+  if (/condition|조건|주의|条件|条件|điều kiện/.test(n)) return 'conditions';
+  if (/note|비고|remark|備考|备注|ghi chú/.test(n)) return 'notes';
+  // Local language name — check per-country patterns first
+  const patterns = COUNTRY_HEADER_PATTERNS[country] || {};
+  for (const [field, rx] of Object.entries(patterns)) {
+    if (rx.test(h.toLowerCase())) return field;
+  }
+  // Generic local name fallback
+  if (/local_name|local name|名称|명칭|tên/.test(n)) return 'local_name';
+  return n;
+}
+
+// GET /api/country-db/search?country=KR&q=...
+app.get('/api/country-db/search', (req, res) => {
+  const { q, country, limit: lim } = req.query;
+  if (!q || q.trim().length < 2) return res.json([]);
+  const term = `%${q.trim()}%`;
+  const maxRows = Math.min(parseInt(lim) || 50, 200);
+  let sql = `SELECT * FROM country_ingredients WHERE (inci_name LIKE ? OR local_name LIKE ? OR cas_no LIKE ?)`;
+  const params = [term, term, term];
+  if (country && country !== 'ALL') { sql += ' AND country = ?'; params.push(country); }
+  sql += ' ORDER BY country, inci_name ASC LIMIT ?';
+  params.push(maxRows);
+  res.json(db.prepare(sql).all(...params));
+});
+
+// GET /api/country-db/stats — count per country
+app.get('/api/country-db/stats', (req, res) => {
+  const rows = db.prepare(`
+    SELECT country, COUNT(*) as count FROM country_ingredients GROUP BY country ORDER BY country
+  `).all();
+  res.json(rows);
+});
+
+// POST /api/country-db/import  { country: "KR", csv: "...", filename: "..." }
+app.post('/api/country-db/import', (req, res) => {
+  const { csv, country, filename } = req.body;
+  if (!csv || typeof csv !== 'string') return res.status(400).json({ error: 'Missing csv' });
+  if (!country) return res.status(400).json({ error: 'Missing country code (e.g. KR, JP, CN, VN, US)' });
+
+  // Skip leading metadata lines
+  const metaEnd = csv.search(/^[^\n]{0,120}(inci|성분명|원료명|成分名|名称|name|cas|tên)/im);
+  const csvBody = metaEnd >= 0 ? csv.slice(metaEnd) : csv;
+
+  let records;
+  try {
+    records = csvParseSync(csvBody, {
+      columns: true, skip_empty_lines: true,
+      relax_quotes: true, relax_column_count: true, trim: true,
+    });
+  } catch(e) { return res.status(400).json({ error: e.message }); }
+  if (!records.length) return res.status(400).json({ error: 'No data rows found' });
+
+  const headers = Object.keys(records[0]);
+  const colMap = {};
+  for (const h of headers) colMap[h] = mapCountryHeader(h, country);
+
+  const mapped = Object.values(colMap);
+  if (!mapped.includes('inci_name') && !mapped.includes('local_name')) {
+    return res.status(400).json({
+      error: 'No ingredient name column found',
+      tip: 'Column must be named "INCI Name", "성분명", "成分名", "tên thành phần", etc.',
+      detected_columns: headers,
+    });
+  }
+
+  const insert = db.prepare(`
+    INSERT INTO country_ingredients
+      (country, inci_name, local_name, cas_no, ec_no, status, max_conc, functions, product_type, conditions, notes, source, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+  `);
+
+  let imported = 0, skipped = 0;
+  const src = filename ? `upload:${filename}` : 'user_upload';
+  const tx = db.transaction(() => {
+    for (const raw of records) {
+      const row = {};
+      for (const [h, v] of Object.entries(raw)) {
+        const f = colMap[h]; if (f && v) row[f] = v;
+      }
+      if (!row.inci_name && !row.local_name) { skipped++; continue; }
+      insert.run(
+        country,
+        row.inci_name    || null, row.local_name || null,
+        row.cas_no       || null, row.ec_no      || null,
+        row.status       || 'allowed',
+        row.max_conc     || null, row.functions  || null,
+        row.product_type || null, row.conditions || null,
+        row.notes        || null, src,
+      );
+      imported++;
+    }
+  });
+  tx();
+
+  const total = db.prepare('SELECT COUNT(*) as c FROM country_ingredients WHERE country = ?').get(country).c;
+  res.json({ imported, skipped, total_in_db: total, country });
+});
+
+// DELETE /api/country-db/clear?country=KR  (omit country to clear all)
+app.delete('/api/country-db/clear', (req, res) => {
+  const { country } = req.query;
+  if (country) {
+    db.prepare('DELETE FROM country_ingredients WHERE country = ?').run(country);
+  } else {
+    db.prepare('DELETE FROM country_ingredients').run();
+  }
+  const rows = db.prepare('SELECT country, COUNT(*) as count FROM country_ingredients GROUP BY country').all();
+  res.json({ cleared: country || 'ALL', remaining: rows });
+});
+
+// Legacy KR aliases
+app.get('/api/kr/search', (req, res) => res.redirect(`/api/country-db/search?country=KR&${new URLSearchParams(req.query)}`));
+app.get('/api/kr/stats',  (req, res) => {
+  const c = db.prepare("SELECT COUNT(*) as c FROM country_ingredients WHERE country='KR'").get().c;
+  res.json({ total: c });
 });
 
 app.delete('/api/cosing/clear', (req, res) => {
