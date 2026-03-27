@@ -123,23 +123,26 @@ db.exec(`
     updated_at TEXT DEFAULT (datetime('now'))
   );
 
-  -- Korean MFDS cosmetic ingredient database (uploaded by user)
-  CREATE TABLE IF NOT EXISTS kr_ingredients (
+  -- Multi-country cosmetic ingredient database (uploaded by user)
+  CREATE TABLE IF NOT EXISTS country_ingredients (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    country TEXT NOT NULL,
     inci_name TEXT,
-    kr_name TEXT,
+    local_name TEXT,
     cas_no TEXT,
+    ec_no TEXT,
     status TEXT DEFAULT 'allowed',
     max_conc TEXT,
     functions TEXT,
     product_type TEXT,
     conditions TEXT,
     notes TEXT,
-    source TEXT DEFAULT 'mfds_upload',
+    source TEXT DEFAULT 'user_upload',
     updated_at TEXT DEFAULT (datetime('now'))
   );
-  CREATE INDEX IF NOT EXISTS idx_kr_inci ON kr_ingredients(LOWER(inci_name));
-  CREATE INDEX IF NOT EXISTS idx_kr_krname ON kr_ingredients(kr_name);
+  CREATE INDEX IF NOT EXISTS idx_cingr_country ON country_ingredients(country);
+  CREATE INDEX IF NOT EXISTS idx_cingr_inci ON country_ingredients(country, LOWER(inci_name));
+  CREATE INDEX IF NOT EXISTS idx_cingr_local ON country_ingredients(country, local_name);
 
   -- Indexes
   CREATE INDEX IF NOT EXISTS idx_creg_inci ON country_regs(LOWER(inci_name));
@@ -156,6 +159,23 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_cosing_inci ON cosing_ingredients(inci_name);
   CREATE INDEX IF NOT EXISTS idx_cosing_cas ON cosing_ingredients(cas_no);
 `);
+
+// Migration: move any existing kr_ingredients rows into country_ingredients
+{
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r => r.name);
+  if (tables.includes('kr_ingredients')) {
+    const count = db.prepare('SELECT COUNT(*) as c FROM kr_ingredients').get().c;
+    if (count > 0) {
+      db.prepare(`
+        INSERT OR IGNORE INTO country_ingredients
+          (country, inci_name, local_name, cas_no, status, max_conc, functions, product_type, conditions, notes, source, updated_at)
+        SELECT 'KR', inci_name, kr_name, cas_no, status, max_conc, functions, product_type, conditions, notes, source, updated_at
+        FROM kr_ingredients
+      `).run();
+    }
+    db.prepare('DROP TABLE IF EXISTS kr_ingredients').run();
+  }
+}
 
 // ============================================================
 // MIGRATIONS — add columns to existing DBs

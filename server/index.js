@@ -532,127 +532,143 @@ app.get('/api/cosing/auto-import', async (req, res) => {
 });
 
 // ============================================================
-// API: KOREAN MFDS INGREDIENT DATABASE
+// API: MULTI-COUNTRY INGREDIENT DATABASE
 // ============================================================
 
-// GET /api/kr/search?q=...
-app.get('/api/kr/search', (req, res) => {
-  const { q, limit: lim } = req.query;
+// Column name mappings per country (local language → our field)
+const COUNTRY_HEADER_PATTERNS = {
+  KR: { local_name: /성분명|원료명|국문|korean_name|한국어/ },
+  JP: { local_name: /成分名|原料名|japanese_name|日本語/ },
+  CN: { local_name: /成分名称|原料名称|中文名|chinese_name/ },
+  VN: { local_name: /tên thành phần|tên nguyên liệu|vietnamese_name|tiếng việt/ },
+  US: { local_name: /common_name|trade_name/ },
+};
+
+function mapCountryHeader(h, country) {
+  const n = h.toLowerCase().replace(/[\s.\-\/\(\)]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  if (/^inci|^name$|^ingredient_name/.test(n)) return 'inci_name';
+  if (/^cas/.test(n)) return 'cas_no';
+  if (/^ec_no|^ec$|^ec_number/.test(n)) return 'ec_no';
+  if (/function|기능|효능|機能|功能/.test(n)) return 'functions';
+  if (/max|conc|농도|사용량|기준|最大|浓度|濃度/.test(n)) return 'max_conc';
+  if (/product.type|제형|제품|剤型|製品|产品类型/.test(n)) return 'product_type';
+  if (/status|허용|금지|restrict|許可|禁止|允许|禁止/.test(n)) return 'status';
+  if (/condition|조건|주의|条件|条件|điều kiện/.test(n)) return 'conditions';
+  if (/note|비고|remark|備考|备注|ghi chú/.test(n)) return 'notes';
+  // Local language name — check per-country patterns first
+  const patterns = COUNTRY_HEADER_PATTERNS[country] || {};
+  for (const [field, rx] of Object.entries(patterns)) {
+    if (rx.test(h.toLowerCase())) return field;
+  }
+  // Generic local name fallback
+  if (/local_name|local name|名称|명칭|tên/.test(n)) return 'local_name';
+  return n;
+}
+
+// GET /api/country-db/search?country=KR&q=...
+app.get('/api/country-db/search', (req, res) => {
+  const { q, country, limit: lim } = req.query;
   if (!q || q.trim().length < 2) return res.json([]);
   const term = `%${q.trim()}%`;
   const maxRows = Math.min(parseInt(lim) || 50, 200);
+  let sql = `SELECT * FROM country_ingredients WHERE (inci_name LIKE ? OR local_name LIKE ? OR cas_no LIKE ?)`;
+  const params = [term, term, term];
+  if (country && country !== 'ALL') { sql += ' AND country = ?'; params.push(country); }
+  sql += ' ORDER BY country, inci_name ASC LIMIT ?';
+  params.push(maxRows);
+  res.json(db.prepare(sql).all(...params));
+});
+
+// GET /api/country-db/stats — count per country
+app.get('/api/country-db/stats', (req, res) => {
   const rows = db.prepare(`
-    SELECT * FROM kr_ingredients
-    WHERE inci_name LIKE ? OR kr_name LIKE ? OR cas_no LIKE ?
-    ORDER BY inci_name ASC LIMIT ?
-  `).all(term, term, term, maxRows);
+    SELECT country, COUNT(*) as count FROM country_ingredients GROUP BY country ORDER BY country
+  `).all();
   res.json(rows);
 });
 
-// GET /api/kr/stats
-app.get('/api/kr/stats', (req, res) => {
-  const total = db.prepare('SELECT COUNT(*) as c FROM kr_ingredients').get().c;
-  res.json({ total });
-});
+// POST /api/country-db/import  { country: "KR", csv: "...", filename: "..." }
+app.post('/api/country-db/import', (req, res) => {
+  const { csv, country, filename } = req.body;
+  if (!csv || typeof csv !== 'string') return res.status(400).json({ error: 'Missing csv' });
+  if (!country) return res.status(400).json({ error: 'Missing country code (e.g. KR, JP, CN, VN, US)' });
 
-// POST /api/kr/import-csv  { csv: "...", filename: "..." }
-// Accepts MFDS CSV export — auto-detects columns
-app.post('/api/kr/import-csv', (req, res) => {
-  const { csv, filename } = req.body;
-  if (!csv || typeof csv !== 'string') {
-    return res.status(400).json({ error: 'Body must be { csv: "..." }' });
-  }
-
-  // Skip metadata lines
-  const metaEnd = csv.search(/^[^\n]{0,80}(inci|성분명|원료명|name|cas)/im);
+  // Skip leading metadata lines
+  const metaEnd = csv.search(/^[^\n]{0,120}(inci|성분명|원료명|成分名|名称|name|cas|tên)/im);
   const csvBody = metaEnd >= 0 ? csv.slice(metaEnd) : csv;
 
   let records;
   try {
     records = csvParseSync(csvBody, {
-      columns: true,
-      skip_empty_lines: true,
-      relax_quotes: true,
-      relax_column_count: true,
-      trim: true,
+      columns: true, skip_empty_lines: true,
+      relax_quotes: true, relax_column_count: true, trim: true,
     });
-  } catch(e) {
-    return res.status(400).json({ error: e.message });
-  }
-
+  } catch(e) { return res.status(400).json({ error: e.message }); }
   if (!records.length) return res.status(400).json({ error: 'No data rows found' });
-
-  // Map header → our column
-  function mapKrHeader(h) {
-    const n = h.toLowerCase().replace(/[\s.\-\/\(\)]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
-    if (/inci|^name$|^ingredient/.test(n)) return 'inci_name';
-    if (/한국|국문|kr_name|korean_name|성분명|원료명/.test(n)) return 'kr_name';
-    if (/^cas/.test(n)) return 'cas_no';
-    if (/function|기능|효능/.test(n)) return 'functions';
-    if (/max|conc|농도|사용량|기준/.test(n)) return 'max_conc';
-    if (/product|제형|제품/.test(n)) return 'product_type';
-    if (/status|허용|금지|restrict/.test(n)) return 'status';
-    if (/condition|조건|주의/.test(n)) return 'conditions';
-    if (/note|비고|remark/.test(n)) return 'notes';
-    return n;
-  }
 
   const headers = Object.keys(records[0]);
   const colMap = {};
-  for (const h of headers) colMap[h] = mapKrHeader(h);
+  for (const h of headers) colMap[h] = mapCountryHeader(h, country);
 
-  // Need at least one name column
-  const hasMappedInci = Object.values(colMap).includes('inci_name');
-  const hasMappedKr   = Object.values(colMap).includes('kr_name');
-  if (!hasMappedInci && !hasMappedKr) {
+  const mapped = Object.values(colMap);
+  if (!mapped.includes('inci_name') && !mapped.includes('local_name')) {
     return res.status(400).json({
-      error: 'No ingredient name column found. Add a column named "INCI Name", "성분명", or "원료명".',
+      error: 'No ingredient name column found',
+      tip: 'Column must be named "INCI Name", "성분명", "成分名", "tên thành phần", etc.',
       detected_columns: headers,
     });
   }
 
   const insert = db.prepare(`
-    INSERT OR REPLACE INTO kr_ingredients
-      (inci_name, kr_name, cas_no, status, max_conc, functions, product_type, conditions, notes, source, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'mfds_upload', datetime('now'))
+    INSERT INTO country_ingredients
+      (country, inci_name, local_name, cas_no, ec_no, status, max_conc, functions, product_type, conditions, notes, source, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
   `);
 
   let imported = 0, skipped = 0;
+  const src = filename ? `upload:${filename}` : 'user_upload';
   const tx = db.transaction(() => {
     for (const raw of records) {
       const row = {};
       for (const [h, v] of Object.entries(raw)) {
-        const mapped = colMap[h];
-        if (mapped && v) row[mapped] = v;
+        const f = colMap[h]; if (f && v) row[f] = v;
       }
-
-      const inci = row.inci_name || null;
-      const kr   = row.kr_name   || null;
-      if (!inci && !kr) { skipped++; continue; }
-
+      if (!row.inci_name && !row.local_name) { skipped++; continue; }
       insert.run(
-        inci, kr,
-        row.cas_no    || null,
-        row.status    || 'allowed',
-        row.max_conc  || null,
-        row.functions || null,
-        row.product_type || null,
-        row.conditions   || null,
-        row.notes        || null,
+        country,
+        row.inci_name    || null, row.local_name || null,
+        row.cas_no       || null, row.ec_no      || null,
+        row.status       || 'allowed',
+        row.max_conc     || null, row.functions  || null,
+        row.product_type || null, row.conditions || null,
+        row.notes        || null, src,
       );
       imported++;
     }
   });
   tx();
 
-  const total = db.prepare('SELECT COUNT(*) as c FROM kr_ingredients').get().c;
-  res.json({ imported, skipped, total_in_db: total });
+  const total = db.prepare('SELECT COUNT(*) as c FROM country_ingredients WHERE country = ?').get(country).c;
+  res.json({ imported, skipped, total_in_db: total, country });
 });
 
-// DELETE /api/kr/clear
-app.delete('/api/kr/clear', (req, res) => {
-  db.prepare('DELETE FROM kr_ingredients').run();
-  res.json({ total_in_db: 0 });
+// DELETE /api/country-db/clear?country=KR  (omit country to clear all)
+app.delete('/api/country-db/clear', (req, res) => {
+  const { country } = req.query;
+  if (country) {
+    db.prepare('DELETE FROM country_ingredients WHERE country = ?').run(country);
+  } else {
+    db.prepare('DELETE FROM country_ingredients').run();
+  }
+  const rows = db.prepare('SELECT country, COUNT(*) as count FROM country_ingredients GROUP BY country').all();
+  res.json({ cleared: country || 'ALL', remaining: rows });
+});
+
+// Legacy KR aliases
+app.get('/api/kr/search', (req, res) => res.redirect(`/api/country-db/search?country=KR&${new URLSearchParams(req.query)}`));
+app.get('/api/kr/stats',  (req, res) => {
+  const c = db.prepare("SELECT COUNT(*) as c FROM country_ingredients WHERE country='KR'").get().c;
+  res.json({ total: c });
 });
 
 app.delete('/api/cosing/clear', (req, res) => {
