@@ -535,7 +535,140 @@ function renderSearch() {
         <div id="csvResult" style="display:none;margin-top:12px"></div>
       </div>
       <div id="cosingResults"></div>
+
+      <!-- Korean MFDS panel -->
+      <div id="krPanel" style="margin-top:24px;border-top:2px solid var(--border);padding-top:20px">
+        <div class="flex justify-between items-center mb-12">
+          <div>
+            <span class="fw-600" style="font-size:15px">🇰🇷 Cơ sở dữ liệu Hàn Quốc (MFDS)</span>
+            <span id="krStats" class="fs-12 text-gray" style="margin-left:10px">0 thành phần</span>
+          </div>
+          <div class="flex gap-8">
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('krUploadArea').style.display=document.getElementById('krUploadArea').style.display==='none'?'block':'none'" style="font-size:12px">
+              ⬆ Upload bảng MFDS
+            </button>
+            <button class="btn btn-outline btn-sm" onclick="confirmClearKr()" style="font-size:12px;color:var(--danger)">Xóa DB</button>
+          </div>
+        </div>
+
+        <div id="krUploadArea" style="display:none;margin-bottom:16px;padding:14px;background:var(--bg-secondary);border-radius:10px;border:1px solid var(--border)">
+          <div class="fs-13 fw-600 mb-8">Upload file bảng thành phần MFDS</div>
+          <div class="fs-12 text-gray mb-10">Hỗ trợ CSV hoặc TSV từ trang MFDS (<a href="https://www.mfds.go.kr" target="_blank" style="color:var(--primary)">mfds.go.kr</a>).
+            Cột nhận diện: <b>INCI Name</b> hoặc <b>성분명</b> / <b>원료명</b>.</div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <label style="cursor:pointer">
+              <input type="file" id="krFileInput" accept=".csv,.tsv,.txt" style="display:none" onchange="handleKrFile(this)">
+              <span class="btn btn-primary btn-sm" style="font-size:12px" onclick="document.getElementById('krFileInput').click()">Chọn file CSV/TSV</span>
+            </label>
+            <span class="fs-12 text-gray" id="krFileName">Chưa chọn file</span>
+          </div>
+          <div id="krUploadResult" style="margin-top:10px;font-size:13px"></div>
+        </div>
+
+        <input type="text" id="krSearchInput" placeholder="Tìm thành phần trong DB Hàn Quốc (INCI hoặc tên tiếng Hàn)..."
+          style="width:100%;padding:10px 14px;border-radius:8px;border:1px solid var(--border);font-size:13px;outline:none"
+          oninput="scheduleKrSearch(this.value)">
+        <div id="krSearchStatus" class="fs-12 text-gray mt-6"></div>
+        <div id="krResults" style="margin-top:12px"></div>
+      </div>
     </div>`;
+}
+
+// ── Korean MFDS DB ──────────────────────────────────────────
+let krTimer = null;
+function scheduleKrSearch(q) {
+  clearTimeout(krTimer);
+  if (!q || q.trim().length < 2) {
+    document.getElementById('krResults').innerHTML = '';
+    document.getElementById('krSearchStatus').textContent = '';
+    return;
+  }
+  krTimer = setTimeout(() => doKrSearch(q), 300);
+}
+
+async function doKrSearch(q) {
+  const statusEl = document.getElementById('krSearchStatus');
+  const resultsEl = document.getElementById('krResults');
+  statusEl.textContent = 'Đang tìm...';
+  resultsEl.innerHTML = '';
+  try {
+    const rows = await fetch(`/api/kr/search?q=${encodeURIComponent(q)}`).then(r => r.json());
+    statusEl.innerHTML = rows.length
+      ? `Tìm thấy <b>${rows.length}</b> kết quả · Nguồn: MFDS (uploaded)`
+      : `Không tìm thấy trong DB Hàn Quốc`;
+    resultsEl.innerHTML = rows.map(r => krCard(r)).join('');
+  } catch(e) {
+    statusEl.textContent = 'Lỗi kết nối';
+  }
+}
+
+function krCard(r) {
+  const statusMap = {
+    allowed:'#16a34a', restricted:'#d97706', prohibited:'#dc2626', not_listed:'#9ca3af'
+  };
+  const statusLabel = { allowed:'Cho phép', restricted:'Hạn chế', prohibited:'Bị cấm', not_listed:'Chưa quy định' };
+  const sc = statusMap[r.status] || '#6b7280';
+  const sl = statusLabel[r.status] || r.status;
+  return `<div class="card mb-6" style="padding:12px 16px">
+    <div class="flex justify-between items-center">
+      <div>
+        <span class="fw-600 fs-14">${r.inci_name || r.kr_name || '—'}</span>
+        ${r.kr_name && r.inci_name ? `<span class="fs-12 text-gray" style="margin-left:8px">${r.kr_name}</span>` : ''}
+        ${r.cas_no ? `<span class="fs-12 text-gray" style="margin-left:8px">CAS: ${r.cas_no}</span>` : ''}
+      </div>
+      <div class="flex gap-8 items-center">
+        <span style="color:${sc};font-weight:600;font-size:12px">${sl}</span>
+        ${r.max_conc ? `<span class="fs-12 fw-600 text-primary">${r.max_conc}</span>` : ''}
+      </div>
+    </div>
+    ${r.functions ? `<div class="fs-12 text-gray mt-4">${r.functions}</div>` : ''}
+    ${r.conditions ? `<div class="fs-12" style="margin-top:4px;color:var(--warning)">${r.conditions}</div>` : ''}
+    ${r.notes ? `<div class="fs-12 text-gray mt-4">${r.notes}</div>` : ''}
+  </div>`;
+}
+
+async function loadKrStats() {
+  try {
+    const { total } = await fetch('/api/kr/stats').then(r => r.json());
+    const el = document.getElementById('krStats');
+    if (el) el.textContent = total ? `${total.toLocaleString()} thành phần` : '0 thành phần (chưa có dữ liệu)';
+  } catch(e) {}
+}
+
+async function handleKrFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  document.getElementById('krFileName').textContent = file.name;
+  const resultEl = document.getElementById('krUploadResult');
+  resultEl.innerHTML = '<span class="text-gray">Đang đọc file...</span>';
+
+  const text = await file.text();
+  resultEl.innerHTML = '<span class="text-gray">Đang import...</span>';
+
+  try {
+    const resp = await fetch('/api/kr/import-csv', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ csv: text, filename: file.name }),
+    });
+    const data = await resp.json();
+    if (data.error) {
+      resultEl.innerHTML = `<span style="color:var(--danger)">Lỗi: ${data.error}${data.detected_columns ? '<br>Cột phát hiện: ' + data.detected_columns.join(', ') : ''}</span>`;
+    } else {
+      resultEl.innerHTML = `<span style="color:var(--success)">✓ Import thành công: <b>${data.imported.toLocaleString()}</b> thành phần · Bỏ qua: ${data.skipped} · Tổng trong DB: ${data.total_in_db.toLocaleString()}</span>`;
+      loadKrStats();
+    }
+  } catch(e) {
+    resultEl.innerHTML = `<span style="color:var(--danger)">Lỗi: ${e.message}</span>`;
+  }
+}
+
+async function confirmClearKr() {
+  if (!confirm('Xóa toàn bộ dữ liệu MFDS Hàn Quốc?')) return;
+  await fetch('/api/kr/clear', { method: 'DELETE' });
+  document.getElementById('krResults').innerHTML = '';
+  document.getElementById('krSearchInput').value = '';
+  loadKrStats();
 }
 
 function switchSearchTab(tab) {
@@ -1177,6 +1310,7 @@ async function loadCosingStats() {
     const el = document.getElementById('cosingDbCount');
     if (el) el.textContent = s.total.toLocaleString() + ' thành phần';
   } catch(e) {}
+  loadKrStats();
 }
 
 function showCosingImport() {

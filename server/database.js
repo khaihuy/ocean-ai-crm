@@ -123,6 +123,24 @@ db.exec(`
     updated_at TEXT DEFAULT (datetime('now'))
   );
 
+  -- Korean MFDS cosmetic ingredient database (uploaded by user)
+  CREATE TABLE IF NOT EXISTS kr_ingredients (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    inci_name TEXT,
+    kr_name TEXT,
+    cas_no TEXT,
+    status TEXT DEFAULT 'allowed',
+    max_conc TEXT,
+    functions TEXT,
+    product_type TEXT,
+    conditions TEXT,
+    notes TEXT,
+    source TEXT DEFAULT 'mfds_upload',
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_kr_inci ON kr_ingredients(LOWER(inci_name));
+  CREATE INDEX IF NOT EXISTS idx_kr_krname ON kr_ingredients(kr_name);
+
   -- Indexes
   CREATE INDEX IF NOT EXISTS idx_creg_inci ON country_regs(LOWER(inci_name));
   CREATE UNIQUE INDEX IF NOT EXISTS idx_creg_unique ON country_regs(LOWER(TRIM(inci_name)), country);

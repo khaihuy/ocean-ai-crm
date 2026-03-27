@@ -531,6 +531,130 @@ app.get('/api/cosing/auto-import', async (req, res) => {
   res.end();
 });
 
+// ============================================================
+// API: KOREAN MFDS INGREDIENT DATABASE
+// ============================================================
+
+// GET /api/kr/search?q=...
+app.get('/api/kr/search', (req, res) => {
+  const { q, limit: lim } = req.query;
+  if (!q || q.trim().length < 2) return res.json([]);
+  const term = `%${q.trim()}%`;
+  const maxRows = Math.min(parseInt(lim) || 50, 200);
+  const rows = db.prepare(`
+    SELECT * FROM kr_ingredients
+    WHERE inci_name LIKE ? OR kr_name LIKE ? OR cas_no LIKE ?
+    ORDER BY inci_name ASC LIMIT ?
+  `).all(term, term, term, maxRows);
+  res.json(rows);
+});
+
+// GET /api/kr/stats
+app.get('/api/kr/stats', (req, res) => {
+  const total = db.prepare('SELECT COUNT(*) as c FROM kr_ingredients').get().c;
+  res.json({ total });
+});
+
+// POST /api/kr/import-csv  { csv: "...", filename: "..." }
+// Accepts MFDS CSV export — auto-detects columns
+app.post('/api/kr/import-csv', (req, res) => {
+  const { csv, filename } = req.body;
+  if (!csv || typeof csv !== 'string') {
+    return res.status(400).json({ error: 'Body must be { csv: "..." }' });
+  }
+
+  // Skip metadata lines
+  const metaEnd = csv.search(/^[^\n]{0,80}(inci|성분명|원료명|name|cas)/im);
+  const csvBody = metaEnd >= 0 ? csv.slice(metaEnd) : csv;
+
+  let records;
+  try {
+    records = csvParseSync(csvBody, {
+      columns: true,
+      skip_empty_lines: true,
+      relax_quotes: true,
+      relax_column_count: true,
+      trim: true,
+    });
+  } catch(e) {
+    return res.status(400).json({ error: e.message });
+  }
+
+  if (!records.length) return res.status(400).json({ error: 'No data rows found' });
+
+  // Map header → our column
+  function mapKrHeader(h) {
+    const n = h.toLowerCase().replace(/[\s.\-\/\(\)]+/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    if (/inci|^name$|^ingredient/.test(n)) return 'inci_name';
+    if (/한국|국문|kr_name|korean_name|성분명|원료명/.test(n)) return 'kr_name';
+    if (/^cas/.test(n)) return 'cas_no';
+    if (/function|기능|효능/.test(n)) return 'functions';
+    if (/max|conc|농도|사용량|기준/.test(n)) return 'max_conc';
+    if (/product|제형|제품/.test(n)) return 'product_type';
+    if (/status|허용|금지|restrict/.test(n)) return 'status';
+    if (/condition|조건|주의/.test(n)) return 'conditions';
+    if (/note|비고|remark/.test(n)) return 'notes';
+    return n;
+  }
+
+  const headers = Object.keys(records[0]);
+  const colMap = {};
+  for (const h of headers) colMap[h] = mapKrHeader(h);
+
+  // Need at least one name column
+  const hasMappedInci = Object.values(colMap).includes('inci_name');
+  const hasMappedKr   = Object.values(colMap).includes('kr_name');
+  if (!hasMappedInci && !hasMappedKr) {
+    return res.status(400).json({
+      error: 'No ingredient name column found. Add a column named "INCI Name", "성분명", or "원료명".',
+      detected_columns: headers,
+    });
+  }
+
+  const insert = db.prepare(`
+    INSERT OR REPLACE INTO kr_ingredients
+      (inci_name, kr_name, cas_no, status, max_conc, functions, product_type, conditions, notes, source, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'mfds_upload', datetime('now'))
+  `);
+
+  let imported = 0, skipped = 0;
+  const tx = db.transaction(() => {
+    for (const raw of records) {
+      const row = {};
+      for (const [h, v] of Object.entries(raw)) {
+        const mapped = colMap[h];
+        if (mapped && v) row[mapped] = v;
+      }
+
+      const inci = row.inci_name || null;
+      const kr   = row.kr_name   || null;
+      if (!inci && !kr) { skipped++; continue; }
+
+      insert.run(
+        inci, kr,
+        row.cas_no    || null,
+        row.status    || 'allowed',
+        row.max_conc  || null,
+        row.functions || null,
+        row.product_type || null,
+        row.conditions   || null,
+        row.notes        || null,
+      );
+      imported++;
+    }
+  });
+  tx();
+
+  const total = db.prepare('SELECT COUNT(*) as c FROM kr_ingredients').get().c;
+  res.json({ imported, skipped, total_in_db: total });
+});
+
+// DELETE /api/kr/clear
+app.delete('/api/kr/clear', (req, res) => {
+  db.prepare('DELETE FROM kr_ingredients').run();
+  res.json({ total_in_db: 0 });
+});
+
 app.delete('/api/cosing/clear', (req, res) => {
   const { keep_seed } = req.query;
   if (keep_seed === '1') {
