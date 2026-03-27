@@ -517,79 +517,80 @@ function parseCosIngCsv(csv) {
   });
 }
 
-app.get('/api/cosing/auto-import', async (req, res) => {
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-
-  const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
-
+// Core import logic — shared by SSE endpoint and startup auto-import
+async function runCosIngImport(onProgress) {
   const insert = db.prepare(`
     INSERT OR IGNORE INTO cosing_ingredients
       (cosing_ref_no, inci_name, cas_no, ec_no, functions, annex, max_conc,
        origin, uv_range, sccs_assessment, sccs_ref, source, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'cosing_full', datetime('now'))
   `);
-
   let totalImported = 0, totalSkipped = 0;
 
-  try {
-    for (let fi = 0; fi < COSING_CSV_FILES.length; fi++) {
-      const { file, label, defaultAnnex } = COSING_CSV_FILES[fi];
-      send({ status: 'downloading', msg: `[${fi+1}/${COSING_CSV_FILES.length}] Đang tải ${label}...` });
+  for (let fi = 0; fi < COSING_CSV_FILES.length; fi++) {
+    const { file, label, defaultAnnex } = COSING_CSV_FILES[fi];
+    onProgress({ status: 'downloading', msg: `[${fi+1}/${COSING_CSV_FILES.length}] Đang tải ${label}...` });
 
-      let response;
-      try { response = await fetch(COSING_BASE_URL + file); }
-      catch(e) { send({ status: 'warning', msg: `Bỏ qua ${label}: ${e.message}` }); continue; }
-      if (!response.ok) { send({ status: 'warning', msg: `Bỏ qua ${label}: HTTP ${response.status}` }); continue; }
+    let response;
+    try { response = await fetch(COSING_BASE_URL + file); }
+    catch(e) { onProgress({ status: 'warning', msg: `Bỏ qua ${label}: ${e.message}` }); continue; }
+    if (!response.ok) { onProgress({ status: 'warning', msg: `Bỏ qua ${label}: HTTP ${response.status}` }); continue; }
 
-      const csv = await response.text();
-      send({ status: 'parsing', msg: `${label}: ${(csv.length/1024).toFixed(0)} KB, đang parse...` });
+    const csv = await response.text();
+    onProgress({ status: 'parsing', msg: `${label}: ${(csv.length/1024).toFixed(0)} KB, đang parse...` });
 
-      let records;
-      try { records = parseCosIngCsv(csv); }
-      catch(e) { send({ status: 'warning', msg: `Bỏ qua ${label}: ${e.message}` }); continue; }
+    let records;
+    try { records = parseCosIngCsv(csv); }
+    catch(e) { onProgress({ status: 'warning', msg: `Bỏ qua ${label}: ${e.message}` }); continue; }
 
-      if (!records.length || !Object.prototype.hasOwnProperty.call(records[0], 'inci_name')) {
-        send({ status: 'warning', msg: `Bỏ qua ${label}: không tìm thấy cột INCI` }); continue;
-      }
-
-      let fileImported = 0;
-      const BATCH = 500;
-      for (let start = 0; start < records.length; start += BATCH) {
-        const batch = records.slice(start, start + BATCH);
-        const tx = db.transaction(() => {
-          for (const row of batch) {
-            const inci = row.inci_name;
-            if (!inci) { totalSkipped++; return; }
-            const annex = parseAnnex(row.annex_raw) || row.annex || defaultAnnex || null;
-            insert.run(
-              row.cosing_ref_no || null, inci,
-              row.cas_no || null, row.ec_no || null,
-              row.functions || null, annex,
-              row.max_conc || null, null, null,
-              row.sccs_assessment || null, row.sccs_ref || null,
-            );
-            fileImported++;
-            totalImported++;
-          }
-        });
-        tx();
-      }
-
-      const overallPct = Math.round(((fi + 1) / COSING_CSV_FILES.length) * 100);
-      send({ status: 'progress', imported: totalImported, skipped: totalSkipped, pct: overallPct,
-             msg: `${label}: ${fileImported} thành phần. Tổng: ${totalImported.toLocaleString()}` });
+    if (!records.length || !Object.prototype.hasOwnProperty.call(records[0], 'inci_name')) {
+      onProgress({ status: 'warning', msg: `Bỏ qua ${label}: không tìm thấy cột INCI` }); continue;
     }
 
-    invalidateInciCache();
-    const total = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
-    send({ status: 'done', imported: totalImported, skipped: totalSkipped, total_in_db: total,
-           msg: `Hoàn thành! ${totalImported.toLocaleString()} thành phần đã import. Tổng trong DB: ${total.toLocaleString()}` });
+    let fileImported = 0;
+    const BATCH = 500;
+    for (let start = 0; start < records.length; start += BATCH) {
+      const batch = records.slice(start, start + BATCH);
+      db.transaction(() => {
+        for (const row of batch) {
+          const inci = row.inci_name;
+          if (!inci) { totalSkipped++; return; }
+          const annex = parseAnnex(row.annex_raw) || row.annex || defaultAnnex || null;
+          insert.run(
+            row.cosing_ref_no || null, inci,
+            row.cas_no || null, row.ec_no || null,
+            row.functions || null, annex,
+            row.max_conc || null, null, null,
+            row.sccs_assessment || null, row.sccs_ref || null,
+          );
+          fileImported++;
+          totalImported++;
+        }
+      })();
+    }
+
+    const overallPct = Math.round(((fi + 1) / COSING_CSV_FILES.length) * 100);
+    onProgress({ status: 'progress', imported: totalImported, skipped: totalSkipped, pct: overallPct,
+                 msg: `${label}: ${fileImported} thành phần. Tổng: ${totalImported.toLocaleString()}` });
+  }
+
+  invalidateInciCache();
+  const total = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
+  onProgress({ status: 'done', imported: totalImported, skipped: totalSkipped, total_in_db: total,
+               msg: `Hoàn thành! ${totalImported.toLocaleString()} thành phần đã import. Tổng trong DB: ${total.toLocaleString()}` });
+  return { totalImported, totalSkipped, total };
+}
+
+app.get('/api/cosing/auto-import', async (req, res) => {
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+  try {
+    await runCosIngImport(send);
   } catch(e) {
     send({ status: 'error', msg: e.message });
   }
-
   res.end();
 });
 
@@ -752,6 +753,15 @@ app.get('*', (req, res) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 OCEAN AI CRM running on port ${PORT}`);
   console.log(`📊 Dashboard: http://localhost:${PORT}`);
+
+  // Auto-import CosIng EU data on startup if DB has only seed data
+  const count = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
+  if (count < 500) {
+    console.log(`📥 cosing_ingredients chỉ có ${count} dòng — tự động import từ CosIng EU...`);
+    runCosIngImport((d) => {
+      if (d.status === 'done' || d.status === 'error' || d.status === 'warning') console.log('[auto-import]', d.msg);
+    }).catch(e => console.error('[auto-import] lỗi:', e.message));
+  }
 });
 
 module.exports = app;
