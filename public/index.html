@@ -430,7 +430,7 @@ function renderSearch() {
       <button id="tab-crm" class="btn ${searchTab==='crm'?'btn-primary':'btn-outline'}" onclick="switchSearchTab('crm')">CRM</button>
       <button id="tab-cosing" class="btn ${searchTab==='cosing'?'btn-primary':'btn-outline'}" onclick="switchSearchTab('cosing')">
         <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-        CosIng EU
+        Tra cứu thành phần
       </button>
     </div>
 
@@ -449,19 +449,15 @@ function renderSearch() {
         <div class="flex justify-between items-center" style="margin-bottom:8px">
           <div class="flex items-center gap-8">
             <svg width="16" height="16" fill="none" stroke="var(--primary)" stroke-width="2" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-            <span class="fw-600 text-primary fs-13">Cơ sở dữ liệu CosIng — European Commission</span>
+            <span class="fw-600 text-primary fs-13">Tra cứu thành phần mỹ phẩm</span>
           </div>
           <div class="flex items-center gap-8 flex-wrap">
-            <span id="cosingDbCount" class="fs-12 text-gray"></span>
+            <span id="cosingDbCount" class="fs-12 text-gray" title="Click 3 lần để mở Import" style="cursor:default" onclick="handleDbCountClick()"></span>
             <span class="fs-12 text-gray">Tham chiếu:</span>
             <a href="https://ec.europa.eu/growth/tools-databases/cosing/reference/annexes" target="_blank" rel="noopener" class="fs-12" style="color:var(--primary)">Annexes</a>
             <a href="https://ec.europa.eu/growth/tools-databases/cosing/reference/regulations" target="_blank" rel="noopener" class="fs-12" style="color:var(--primary)">Regulations</a>
             <a href="https://ec.europa.eu/growth/tools-databases/cosing/reference/functions" target="_blank" rel="noopener" class="fs-12" style="color:var(--primary)">Functions</a>
             <a href="https://ec.europa.eu/growth/tools-databases/cosing/reference/abbreviations" target="_blank" rel="noopener" class="fs-12" style="color:var(--primary)">Abbreviations</a>
-            <button class="btn btn-outline btn-sm" onclick="showCosingImport()" style="font-size:12px">
-              <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              Import CSV
-            </button>
           </div>
         </div>
         <div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
@@ -487,7 +483,7 @@ function renderSearch() {
         <div id="cosingStatus" class="fs-13 text-gray mt-8"></div>
       </div>
       <div id="cosingImportPanel" style="display:none" class="card mb-16">
-        <div class="fw-600 mb-12">Import thành phần CosIng EU</div>
+        <div class="fw-600 mb-12">Import thành phần (CosIng EU)</div>
 
         <!-- Auto-import button -->
         <div style="margin-bottom:16px;padding:14px;background:var(--primary-light);border-radius:10px">
@@ -1167,7 +1163,7 @@ async function doBatchSearch() {
 
   statusEl.innerHTML = `Tìm thấy <b>${found.length}</b> kết quả cho ${names.length} thành phần`
     + (missing.length ? ` · <span style="color:var(--danger)">Không tìm thấy: ${missing.join(', ')}</span>` : '')
-    + ` · Nguồn: Cosing EU (SQLite)`;
+    + ` · Nguồn: CosIng (EU)`;
 
   resultsEl.innerHTML = found.map((r, i) => cosingCard(r, i)).join('');
 }
@@ -1195,17 +1191,24 @@ async function doCosingSearch(q) {
     resultsEl.innerHTML = `
       <div class="card" style="text-align:center;padding:32px">
         <div class="fs-13 text-gray" style="margin-bottom:12px">Không tìm thấy "<strong>${q}</strong>" trong cơ sở dữ liệu</div>
-        <a href="${verifyUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Tìm trực tiếp trên CosIng EU &rarr;</a>
+        <a href="${verifyUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Tìm trực tiếp trên CosIng &rarr;</a>
       </div>`;
     return;
   }
 
-  statusEl.innerHTML = `<span style="color:var(--success)">Tìm thấy ${results.length} thành phần</span>
-    <span class="text-gray" style="margin-left:12px">· Nguồn: CosIng EU (SQLite) ·
-      <a href="${verifyUrl}" target="_blank" rel="noopener" style="color:var(--primary)">Xác minh trên CosIng &rarr;</a>
-    </span>`;
-
-  resultsEl.innerHTML = results.map((r, i) => cosingCard(r, i)).join('');
+  const isFuzzy = results[0] && results[0]._fuzzy;
+  if (isFuzzy) {
+    statusEl.innerHTML = `<span style="color:#b45309;font-weight:600">Không tìm thấy chính xác "<strong>${q}</strong>". Gợi ý tên gần nhất:</span>`;
+    resultsEl.innerHTML = `<div style="background:#fef9c3;border:1px solid #fde047;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:13px;color:#854d0e">
+      ✏️ Có thể bạn muốn tìm: ${results.map(r => `<b>${r.inci_name}</b>`).join(', ')}
+    </div>` + results.map((r, i) => cosingCard(r, i)).join('');
+  } else {
+    statusEl.innerHTML = `<span style="color:var(--success)">Tìm thấy ${results.length} thành phần</span>
+      <span class="text-gray" style="margin-left:12px">·
+        <a href="${verifyUrl}" target="_blank" rel="noopener" style="color:var(--primary)">Xác minh trên CosIng &rarr;</a>
+      </span>`;
+    resultsEl.innerHTML = results.map((r, i) => cosingCard(r, i)).join('');
+  }
 }
 
 function cosingCard(r, idx) {
@@ -1218,8 +1221,8 @@ function cosingCard(r, idx) {
     ? `https://ec.europa.eu/growth/tools-databases/cosing/details/${r.cosing_ref_no}`
     : `https://ec.europa.eu/growth/tools-databases/cosing/`;
 
-  return `<div class="card mb-8" style="padding:16px">
-    <div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleCosing(${idx}, ${JSON.stringify(r.inci_name)})">
+  return `<div class="card mb-8" style="padding:16px" id="card-${idx}" data-inci="${encodeURIComponent(r.inci_name)}">
+    <div class="flex justify-between items-center" style="cursor:pointer" onclick="toggleCosing(${idx})">
       <div>
         <span class="fw-600" style="font-size:15px">${r.inci_name}</span>
         <span class="fs-12 text-gray" style="margin-left:10px">CAS: ${r.cas_no || '—'}</span>
@@ -1262,7 +1265,7 @@ function cosingCard(r, idx) {
         </div>` : ''}
       <div id="creg-${idx}" style="margin-top:14px"></div>
       <div style="margin-top:12px">
-        <a href="${cosUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Xác minh trên CosIng EU &rarr;</a>
+        <a href="${cosUrl}" target="_blank" rel="noopener" class="btn btn-outline btn-sm">Xác minh trên CosIng &rarr;</a>
       </div>
     </div>
   </div>`;
@@ -1308,9 +1311,10 @@ function renderCountryRegs(regs) {
   </div>`;
 }
 
-async function toggleCosing(idx, inciName) {
+async function toggleCosing(idx) {
   const el = document.getElementById('det-' + idx);
   const arr = document.getElementById('arr-' + idx);
+  const inciName = decodeURIComponent(document.getElementById('card-' + idx)?.dataset?.inci || '');
   const open = el.style.display !== 'none';
   el.style.display = open ? 'none' : 'block';
   arr.style.transform = open ? '' : 'rotate(180deg)';
@@ -1385,6 +1389,17 @@ async function loadCosingStats() {
 function showCosingImport() {
   const panel = document.getElementById('cosingImportPanel');
   panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+let _dbClickCount = 0, _dbClickTimer = null;
+function handleDbCountClick() {
+  _dbClickCount++;
+  clearTimeout(_dbClickTimer);
+  _dbClickTimer = setTimeout(() => { _dbClickCount = 0; }, 800);
+  if (_dbClickCount >= 3) {
+    _dbClickCount = 0;
+    showCosingImport();
+  }
 }
 
 function handleCsvDrop(e) {
