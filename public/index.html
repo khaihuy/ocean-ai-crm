@@ -249,7 +249,7 @@ async function render() {
   await loadData();
   const el = document.getElementById('content');
   switch (currentPage) {
-    case 'dashboard': el.innerHTML = renderDashboard(); break;
+    case 'dashboard': el.innerHTML = renderDashboard(); loadCosingStats(); break;
     case 'clients': el.innerHTML = renderClients(); break;
     case 'contracts': el.innerHTML = renderContracts(); break;
     case 'cases': el.innerHTML = renderCases(); break;
@@ -273,6 +273,14 @@ function renderDashboard() {
       ${statCard('Hợp đồng', d.contracts.total, `${d.contracts.active} đang thực hiện`, 'var(--success)')}
       ${statCard('Hồ sơ đang xử lý', d.cases.active, `${d.cases.urgent} ưu tiên cao`, 'var(--warning)')}
       ${statCard('Doanh thu', fmt(d.contracts.total_value), `Công nợ: ${fmt(totalDebt)}`, 'var(--info)')}
+      <div class="card stat-card" id="ingredientStatCard">
+        <div class="stat-icon" style="background:#f0fdf4"><svg width="24" height="24" fill="none" stroke="#059669" stroke-width="2" viewBox="0 0 24 24"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/></svg></div>
+        <div>
+          <div class="stat-label">Cơ sở dữ liệu thành phần</div>
+          <div class="stat-value" id="dashIngredientTotal">—</div>
+          <div class="stat-sub" id="dashIngredientSub">Đang tải...</div>
+        </div>
+      </div>
     </div>
     <div class="grid-2">
       <div class="card">
@@ -500,7 +508,7 @@ function renderSearch() {
             <span id="cdbTotalCount" class="fs-12 text-gray"></span>
             <a href="https://ec.europa.eu/growth/tools-databases/cosing/reference/annexes" target="_blank" rel="noopener" class="fs-12" style="color:var(--primary)">Annexes</a>
             <a href="https://ec.europa.eu/growth/tools-databases/cosing/reference/regulations" target="_blank" rel="noopener" class="fs-12" style="color:var(--primary)">Regulations</a>
-            <button class="btn btn-outline btn-sm" onclick="showCosingImport()" style="font-size:12px">
+            <button class="btn btn-outline btn-sm" onclick="showCosingImport()" style="font-size:12px;display:none">
               <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
               Import EU
             </button>
@@ -1442,9 +1450,26 @@ async function startAutoImport() {
 
 async function loadCosingStats() {
   try {
-    const s = await fetch('/api/cosing/stats').then(r => r.json());
+    const [s, t] = await Promise.all([
+      fetch('/api/cosing/stats').then(r => r.json()),
+      fetch('/api/ingredients/total').then(r => r.json()),
+    ]);
     const el = document.getElementById('cosingDbCount');
-    if (el) el.textContent = s.total.toLocaleString() + ' thành phần';
+    if (el) el.textContent = s.total.toLocaleString() + ' EU CosIng';
+
+    // Tab Tra cứu — tổng
+    const totalEl = document.getElementById('cdbTotalCount');
+    if (totalEl && t.country_db > 0) totalEl.textContent = `· ${t.country_db.toLocaleString()} quốc gia`;
+
+    // Dashboard stat card
+    const dashTotal = document.getElementById('dashIngredientTotal');
+    const dashSub   = document.getElementById('dashIngredientSub');
+    if (dashTotal) dashTotal.textContent = t.total.toLocaleString();
+    if (dashSub) {
+      const parts = [`EU CosIng: ${t.cosing_eu.toLocaleString()}`];
+      if (t.country_db > 0) parts.push(`Quốc gia: ${t.country_db.toLocaleString()}`);
+      dashSub.textContent = parts.join(' · ');
+    }
   } catch(e) {}
   loadKrStats();
 }

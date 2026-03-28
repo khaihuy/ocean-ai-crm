@@ -293,6 +293,21 @@ app.get('/api/cosing/stats', (req, res) => {
   });
 });
 
+// GET /api/ingredients/total — tổng số thành phần toàn hệ thống
+app.get('/api/ingredients/total', (req, res) => {
+  const cosing     = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
+  const countryReg = db.prepare('SELECT COUNT(DISTINCT LOWER(TRIM(inci_name))) as c FROM country_regs').get().c;
+  const countryDb  = db.prepare('SELECT COUNT(*) as c FROM country_ingredients').get().c;
+  const byCountry  = db.prepare('SELECT country, COUNT(*) as count FROM country_ingredients GROUP BY country ORDER BY count DESC').all();
+  res.json({
+    cosing_eu: cosing,
+    country_regs: countryReg,
+    country_db: countryDb,
+    total: cosing + countryDb,
+    by_country: byCountry,
+  });
+});
+
 // GET /api/country-regs?inci=POLYSILICONE-15
 app.get('/api/country-regs', (req, res) => {
   const { inci } = req.query;
