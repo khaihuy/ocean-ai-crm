@@ -1006,6 +1006,277 @@ app.post('/api/notebooks/:id/summarize', async (req, res) => {
   }
 });
 
+// ============================================================
+// SYSTEM CHAT — AI trả lời câu hỏi về dữ liệu CRM
+// POST /api/system-chat  { message, history: [{role,content}] }
+// ============================================================
+
+// Tool definitions for OpenAI function calling
+const CRM_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_dashboard_stats',
+      description: 'Lấy thống kê tổng quan hệ thống: số khách hàng, hợp đồng, hồ sơ, doanh thu',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_clients',
+      description: 'Tìm kiếm khách hàng theo tên, quốc gia, ngành nghề, trạng thái',
+      parameters: {
+        type: 'object',
+        properties: {
+          search:   { type: 'string', description: 'Từ khóa tìm tên, người đại diện, email' },
+          country:  { type: 'string', description: 'Quốc gia' },
+          industry: { type: 'string', description: 'Ngành nghề' },
+          status:   { type: 'string', description: 'Trạng thái: Tiềm năng, Đang hoạt động, Không hoạt động' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_contracts',
+      description: 'Tìm kiếm hợp đồng theo số hợp đồng, loại dịch vụ, trạng thái, trạng thái thanh toán',
+      parameters: {
+        type: 'object',
+        properties: {
+          search:         { type: 'string', description: 'Từ khóa tìm số HĐ, tên khách hàng' },
+          status:         { type: 'string', description: 'Trạng thái HĐ: Dự thảo, Đang thực hiện, Hoàn thành, Hủy' },
+          service_type:   { type: 'string', description: 'Loại dịch vụ' },
+          payment_status: { type: 'string', description: 'Thanh toán: Chưa thanh toán, Thanh toán một phần, Đã thanh toán' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_cases',
+      description: 'Tìm kiếm hồ sơ/giấy phép theo tên, trạng thái, mức độ ưu tiên, người phụ trách',
+      parameters: {
+        type: 'object',
+        properties: {
+          search:   { type: 'string', description: 'Từ khóa tìm tên hồ sơ, khách hàng, người phụ trách' },
+          status:   { type: 'string', description: 'Trạng thái: Tiếp nhận, Đang xử lý, Chờ bổ sung, Đã cấp phép, Từ chối' },
+          priority: { type: 'string', description: 'Ưu tiên: Cao, Trung bình, Thấp' },
+          assignee: { type: 'string', description: 'Tên người phụ trách' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_upcoming_deadlines',
+      description: 'Lấy danh sách hồ sơ sắp đến hạn trong N ngày tới',
+      parameters: {
+        type: 'object',
+        properties: {
+          days: { type: 'integer', description: 'Số ngày tới (mặc định 30)', default: 30 },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_client_detail',
+      description: 'Lấy thông tin chi tiết một khách hàng cùng danh sách hợp đồng',
+      parameters: {
+        type: 'object',
+        properties: {
+          client_id: { type: 'string', description: 'ID khách hàng' },
+        },
+        required: ['client_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_revenue_report',
+      description: 'Báo cáo doanh thu: tổng giá trị HĐ, đã thu, còn nợ, theo dịch vụ / quốc gia',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+];
+
+// Execute a CRM tool call
+function executeCrmTool(name, args) {
+  switch (name) {
+    case 'get_dashboard_stats': {
+      return {
+        clients: {
+          total:     db.prepare('SELECT COUNT(*) as c FROM clients').get().c,
+          active:    db.prepare("SELECT COUNT(*) as c FROM clients WHERE status='Đang hoạt động'").get().c,
+          potential: db.prepare("SELECT COUNT(*) as c FROM clients WHERE status='Tiềm năng'").get().c,
+          by_country: db.prepare('SELECT country, COUNT(*) as count FROM clients GROUP BY country ORDER BY count DESC LIMIT 8').all(),
+        },
+        contracts: {
+          total:       db.prepare('SELECT COUNT(*) as c FROM contracts').get().c,
+          active:      db.prepare("SELECT COUNT(*) as c FROM contracts WHERE status='Đang thực hiện'").get().c,
+          total_value: db.prepare('SELECT COALESCE(SUM(value),0) as v FROM contracts').get().v,
+          total_paid:  db.prepare('SELECT COALESCE(SUM(paid_amount),0) as v FROM contracts').get().v,
+          unpaid:      db.prepare("SELECT COUNT(*) as c FROM contracts WHERE payment_status='Chưa thanh toán'").get().c,
+        },
+        cases: {
+          total:  db.prepare('SELECT COUNT(*) as c FROM cases').get().c,
+          active: db.prepare("SELECT COUNT(*) as c FROM cases WHERE status NOT IN ('Đã cấp phép','Từ chối')").get().c,
+          urgent: db.prepare("SELECT COUNT(*) as c FROM cases WHERE priority='Cao' AND status NOT IN ('Đã cấp phép','Từ chối')").get().c,
+        },
+      };
+    }
+
+    case 'search_clients': {
+      let sql = 'SELECT id, name, country, industry, representative, email, phone, investment_capital, status FROM clients WHERE 1=1';
+      const p = [];
+      if (args.country)  { sql += ' AND country = ?';  p.push(args.country); }
+      if (args.industry) { sql += ' AND industry = ?'; p.push(args.industry); }
+      if (args.status)   { sql += ' AND status = ?';   p.push(args.status); }
+      if (args.search)   { sql += ' AND (name LIKE ? OR representative LIKE ? OR email LIKE ?)'; p.push(`%${args.search}%`, `%${args.search}%`, `%${args.search}%`); }
+      sql += ' ORDER BY created_at DESC LIMIT 20';
+      return db.prepare(sql).all(...p);
+    }
+
+    case 'search_contracts': {
+      let sql = `SELECT c.id, c.contract_no, c.service_type, c.value, c.paid_amount, c.status, c.payment_status, c.start_date, c.end_date, cl.name as client_name
+                 FROM contracts c LEFT JOIN clients cl ON c.client_id = cl.id WHERE 1=1`;
+      const p = [];
+      if (args.status)         { sql += ' AND c.status = ?';         p.push(args.status); }
+      if (args.service_type)   { sql += ' AND c.service_type = ?';   p.push(args.service_type); }
+      if (args.payment_status) { sql += ' AND c.payment_status = ?'; p.push(args.payment_status); }
+      if (args.search)         { sql += ' AND (c.contract_no LIKE ? OR cl.name LIKE ?)'; p.push(`%${args.search}%`, `%${args.search}%`); }
+      sql += ' ORDER BY c.created_at DESC LIMIT 20';
+      return db.prepare(sql).all(...p);
+    }
+
+    case 'search_cases': {
+      let sql = `SELECT cs.id, cs.case_name, cs.service_type, cs.status, cs.priority, cs.assignee,
+                        cs.start_date, cs.deadline, cs.progress, cl.name as client_name, ct.contract_no
+                 FROM cases cs
+                 LEFT JOIN contracts ct ON cs.contract_id = ct.id
+                 LEFT JOIN clients cl ON ct.client_id = cl.id WHERE 1=1`;
+      const p = [];
+      if (args.status)   { sql += ' AND cs.status = ?';   p.push(args.status); }
+      if (args.priority) { sql += ' AND cs.priority = ?'; p.push(args.priority); }
+      if (args.assignee) { sql += ' AND cs.assignee LIKE ?'; p.push(`%${args.assignee}%`); }
+      if (args.search)   { sql += ' AND (cs.case_name LIKE ? OR cl.name LIKE ? OR cs.assignee LIKE ?)'; p.push(`%${args.search}%`, `%${args.search}%`, `%${args.search}%`); }
+      sql += ' ORDER BY cs.deadline ASC LIMIT 20';
+      return db.prepare(sql).all(...p);
+    }
+
+    case 'get_upcoming_deadlines': {
+      const days = args.days || 30;
+      return db.prepare(`
+        SELECT cs.case_name, cs.status, cs.priority, cs.assignee, cs.deadline, cs.progress,
+               cl.name as client_name, ct.contract_no
+        FROM cases cs
+        LEFT JOIN contracts ct ON cs.contract_id = ct.id
+        LEFT JOIN clients cl ON ct.client_id = cl.id
+        WHERE cs.deadline IS NOT NULL
+          AND cs.status NOT IN ('Đã cấp phép','Từ chối')
+          AND cs.deadline >= date('now')
+          AND cs.deadline <= date('now', '+' || ? || ' days')
+        ORDER BY cs.deadline ASC
+      `).all(days);
+    }
+
+    case 'get_client_detail': {
+      const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(args.client_id);
+      if (!client) return { error: 'Không tìm thấy khách hàng' };
+      const contracts = db.prepare('SELECT id, contract_no, service_type, value, paid_amount, status, payment_status FROM contracts WHERE client_id = ? ORDER BY created_at DESC').all(args.client_id);
+      return { ...client, contracts };
+    }
+
+    case 'get_revenue_report': {
+      return {
+        total_value:   db.prepare('SELECT COALESCE(SUM(value),0) as v FROM contracts').get().v,
+        total_paid:    db.prepare('SELECT COALESCE(SUM(paid_amount),0) as v FROM contracts').get().v,
+        total_debt:    db.prepare('SELECT COALESCE(SUM(value - paid_amount),0) as v FROM contracts WHERE status != \'Hủy\'').get().v,
+        by_service:    db.prepare('SELECT service_type, COUNT(*) as count, SUM(value) as total, SUM(paid_amount) as paid FROM contracts GROUP BY service_type ORDER BY total DESC').all(),
+        by_country:    db.prepare('SELECT cl.country, SUM(ct.value) as total, SUM(ct.paid_amount) as paid FROM contracts ct LEFT JOIN clients cl ON ct.client_id = cl.id GROUP BY cl.country ORDER BY total DESC').all(),
+        by_status:     db.prepare('SELECT status, COUNT(*) as count, SUM(value) as total FROM contracts GROUP BY status').all(),
+      };
+    }
+
+    default:
+      return { error: `Unknown tool: ${name}` };
+  }
+}
+
+app.post('/api/system-chat', async (req, res) => {
+  const { message, history = [] } = req.body;
+  if (!message) return res.status(400).json({ error: 'message required' });
+  if (!openai)  return res.status(503).json({ error: 'OPENAI_API_KEY chưa được cấu hình' });
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  const send = d => res.write(`data: ${JSON.stringify(d)}\n\n`);
+
+  const systemPrompt = `Bạn là trợ lý AI của OCEAN AI CRM — hệ thống quản lý khách hàng tư vấn đầu tư FDI vào Việt Nam.
+Nhiệm vụ: trả lời nhanh các câu hỏi về khách hàng, hợp đồng, hồ sơ giấy phép, doanh thu trong hệ thống.
+Luôn trả lời bằng tiếng Việt, ngắn gọn và có số liệu cụ thể.
+Khi cần dữ liệu hãy gọi tool phù hợp. Có thể gọi nhiều tool liên tiếp nếu cần.
+Hôm nay: ${new Date().toLocaleDateString('vi-VN')}.`;
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...history.slice(-10),
+    { role: 'user', content: message },
+  ];
+
+  try {
+    // Agentic loop: let AI call tools until it has enough data
+    let loopMsgs = [...messages];
+    for (let iter = 0; iter < 5; iter++) {
+      const resp = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        messages: loopMsgs,
+        tools: CRM_TOOLS,
+        tool_choice: 'auto',
+      });
+
+      const choice = resp.choices[0];
+      loopMsgs.push(choice.message);
+
+      if (choice.finish_reason === 'tool_calls') {
+        // Execute all tool calls
+        for (const tc of choice.message.tool_calls) {
+          const args = JSON.parse(tc.function.arguments || '{}');
+          send({ type: 'tool', name: tc.function.name });
+          const result = executeCrmTool(tc.function.name, args);
+          loopMsgs.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
+        }
+        continue; // next iteration to get final answer
+      }
+
+      // Final answer — stream it
+      const finalContent = choice.message.content || '';
+      // Stream word by word for smoothness
+      const words = finalContent.split(/(?<=\s)/);
+      for (const w of words) {
+        send({ type: 'delta', content: w });
+        await new Promise(r => setTimeout(r, 8));
+      }
+      send({ type: 'done' });
+      res.end();
+      return;
+    }
+
+    send({ type: 'error', message: 'Quá nhiều bước xử lý, thử lại.' });
+    res.end();
+  } catch (e) {
+    send({ type: 'error', message: e.message });
+    res.end();
+  }
+});
+
 // Serve frontend for all non-API routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
