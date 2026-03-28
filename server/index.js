@@ -744,6 +744,268 @@ app.delete('/api/cosing/clear', (req, res) => {
   res.json({ total_in_db: total });
 });
 
+// ============================================================
+// NOTEBOOK AI — NotebookLM-style RAG with OpenAI
+// ============================================================
+const multer  = require('multer');
+const OpenAI  = require('openai');
+const pdfParse = require('pdf-parse');
+const os = require('os');
+
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+
+// Split text into overlapping chunks (~600 chars, 80 char overlap)
+function chunkText(text, size = 600, overlap = 80) {
+  const chunks = [];
+  let start = 0;
+  while (start < text.length) {
+    chunks.push(text.slice(start, start + size));
+    start += size - overlap;
+  }
+  return chunks;
+}
+
+// Extract text from uploaded file buffer
+async function extractText(buffer, mimetype, originalname) {
+  const ext = originalname.split('.').pop().toLowerCase();
+  if (mimetype === 'application/pdf' || ext === 'pdf') {
+    const data = await pdfParse(buffer);
+    return data.text;
+  }
+  // txt, md, csv, etc.
+  return buffer.toString('utf-8');
+}
+
+// Index source chunks into FTS5
+function indexSourceChunks(sourceId, notebookId, text) {
+  db.prepare('DELETE FROM notebook_chunks_fts WHERE source_id = ?').run(sourceId);
+  const chunks = chunkText(text);
+  const ins = db.prepare('INSERT INTO notebook_chunks_fts (chunk_text, source_id, notebook_id, chunk_index) VALUES (?, ?, ?, ?)');
+  const tx = db.transaction(() => chunks.forEach((c, i) => ins.run(c, sourceId, notebookId, i)));
+  tx();
+  return chunks.length;
+}
+
+// Retrieve top-K relevant chunks for a query
+function retrieveChunks(notebookId, query, k = 8) {
+  const rows = db.prepare(`
+    SELECT f.chunk_text, f.source_id, f.chunk_index,
+           s.original_name as source_name
+    FROM notebook_chunks_fts f
+    JOIN notebook_sources s ON s.id = f.source_id
+    WHERE f.notebook_id = ? AND notebook_chunks_fts MATCH ?
+    ORDER BY rank
+    LIMIT ?
+  `).all(notebookId, query.replace(/[^a-zA-ZÀ-ỹ0-9 ]/g, ' ').trim() || '""', k);
+  return rows;
+}
+
+// ── CRUD Notebooks ──────────────────────────────────────────
+app.get('/api/notebooks', (req, res) => {
+  const rows = db.prepare(`
+    SELECT n.*, COUNT(s.id) as source_count,
+           (SELECT COUNT(*) FROM notebook_chats WHERE notebook_id = n.id) as chat_count
+    FROM notebooks n
+    LEFT JOIN notebook_sources s ON s.notebook_id = n.id
+    GROUP BY n.id ORDER BY n.updated_at DESC
+  `).all();
+  res.json(rows);
+});
+
+app.post('/api/notebooks', (req, res) => {
+  const id = genId();
+  const { title, description } = req.body;
+  if (!title) return res.status(400).json({ error: 'title required' });
+  db.prepare('INSERT INTO notebooks (id, title, description) VALUES (?, ?, ?)').run(id, title, description || '');
+  res.status(201).json(db.prepare('SELECT * FROM notebooks WHERE id = ?').get(id));
+});
+
+app.put('/api/notebooks/:id', (req, res) => {
+  const { title, description } = req.body;
+  db.prepare('UPDATE notebooks SET title=?, description=?, updated_at=? WHERE id=?').run(title, description || '', now(), req.params.id);
+  res.json(db.prepare('SELECT * FROM notebooks WHERE id = ?').get(req.params.id));
+});
+
+app.delete('/api/notebooks/:id', (req, res) => {
+  db.prepare('DELETE FROM notebooks WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// ── Sources ──────────────────────────────────────────────────
+app.get('/api/notebooks/:id/sources', (req, res) => {
+  const rows = db.prepare('SELECT id, notebook_id, original_name, file_type, file_size, summary, created_at FROM notebook_sources WHERE notebook_id = ? ORDER BY created_at ASC').all(req.params.id);
+  res.json(rows);
+});
+
+app.post('/api/notebooks/:id/sources', upload.single('file'), async (req, res) => {
+  const nb = db.prepare('SELECT id FROM notebooks WHERE id = ?').get(req.params.id);
+  if (!nb) return res.status(404).json({ error: 'Notebook not found' });
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  try {
+    const text = await extractText(req.file.buffer, req.file.mimetype, req.file.originalname);
+    if (!text || text.trim().length < 10) return res.status(400).json({ error: 'Không thể đọc nội dung file' });
+
+    const srcId = genId();
+    db.prepare('INSERT INTO notebook_sources (id, notebook_id, filename, original_name, file_type, file_size, content_text) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(srcId, req.params.id, req.file.originalname, req.file.originalname, req.file.mimetype, req.file.size, text);
+
+    const chunkCount = indexSourceChunks(srcId, req.params.id, text);
+    db.prepare('UPDATE notebooks SET updated_at=? WHERE id=?').run(now(), req.params.id);
+
+    // Auto-summarize with OpenAI (async, don't block response)
+    res.status(201).json({
+      id: srcId, notebook_id: req.params.id,
+      original_name: req.file.originalname,
+      file_type: req.file.mimetype,
+      file_size: req.file.size,
+      chunks: chunkCount,
+    });
+
+    if (process.env.OPENAI_API_KEY) {
+      const excerpt = text.slice(0, 3000);
+      openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'Tóm tắt ngắn gọn nội dung tài liệu bằng tiếng Việt, tối đa 3 câu.' },
+          { role: 'user', content: excerpt },
+        ],
+        max_tokens: 200,
+      }).then(r => {
+        const summary = r.choices[0]?.message?.content || '';
+        db.prepare('UPDATE notebook_sources SET summary=? WHERE id=?').run(summary, srcId);
+      }).catch(() => {});
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/notebooks/:id/sources/:sid', (req, res) => {
+  db.prepare('DELETE FROM notebook_chunks_fts WHERE source_id = ?').run(req.params.sid);
+  db.prepare('DELETE FROM notebook_sources WHERE id = ? AND notebook_id = ?').run(req.params.sid, req.params.id);
+  res.json({ success: true });
+});
+
+// ── Chat history ─────────────────────────────────────────────
+app.get('/api/notebooks/:id/chats', (req, res) => {
+  const rows = db.prepare('SELECT * FROM notebook_chats WHERE notebook_id = ? ORDER BY created_at ASC').all(req.params.id);
+  res.json(rows);
+});
+
+app.delete('/api/notebooks/:id/chats', (req, res) => {
+  db.prepare('DELETE FROM notebook_chats WHERE notebook_id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// ── Chat (RAG) — SSE streaming ────────────────────────────────
+app.post('/api/notebooks/:id/chat', async (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: 'message required' });
+  if (!process.env.OPENAI_API_KEY) return res.status(503).json({ error: 'OPENAI_API_KEY chưa được cấu hình' });
+
+  const nb = db.prepare('SELECT * FROM notebooks WHERE id = ?').get(req.params.id);
+  if (!nb) return res.status(404).json({ error: 'Notebook not found' });
+
+  const sourceCount = db.prepare('SELECT COUNT(*) as c FROM notebook_sources WHERE notebook_id = ?').get(req.params.id).c;
+
+  // Save user message
+  db.prepare('INSERT INTO notebook_chats (id, notebook_id, role, content) VALUES (?, ?, ?, ?)')
+    .run(genId(), req.params.id, 'user', message);
+
+  // Retrieve relevant chunks via FTS
+  const chunks = sourceCount > 0 ? retrieveChunks(req.params.id, message) : [];
+
+  // If FTS returns nothing, fall back to first chunks of all sources
+  let contextChunks = chunks;
+  if (contextChunks.length === 0 && sourceCount > 0) {
+    contextChunks = db.prepare(`
+      SELECT f.chunk_text, f.source_id, f.chunk_index, s.original_name as source_name
+      FROM notebook_chunks_fts f
+      JOIN notebook_sources s ON s.id = f.source_id
+      WHERE f.notebook_id = ?
+      LIMIT 8
+    `).all(req.params.id);
+  }
+
+  const contextText = contextChunks.length > 0
+    ? contextChunks.map((c, i) => `[Nguồn: ${c.source_name}]\n${c.chunk_text}`).join('\n\n---\n\n')
+    : '';
+
+  const sourcesUsed = [...new Set(contextChunks.map(c => c.source_name))];
+
+  const systemPrompt = contextText
+    ? `Bạn là trợ lý AI phân tích tài liệu. Trả lời bằng tiếng Việt dựa trên các đoạn tài liệu được cung cấp. Nếu câu hỏi không liên quan đến tài liệu, hãy nói rõ.\n\nTài liệu tham khảo:\n${contextText}`
+    : `Bạn là trợ lý AI. Notebook này chưa có tài liệu nào. Hãy nhắc người dùng upload tài liệu trước.`;
+
+  // Previous chat (last 6 turns)
+  const history = db.prepare('SELECT role, content FROM notebook_chats WHERE notebook_id = ? ORDER BY created_at DESC LIMIT 12').all(req.params.id).reverse();
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...history.slice(0, -1).map(h => ({ role: h.role, content: h.content })),
+    { role: 'user', content: message },
+  ];
+
+  // Stream response via SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+  try {
+    const stream = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages,
+      stream: true,
+      max_tokens: 1500,
+    });
+
+    let fullContent = '';
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content || '';
+      if (delta) {
+        fullContent += delta;
+        send({ type: 'delta', content: delta });
+      }
+    }
+
+    // Save assistant response
+    db.prepare('INSERT INTO notebook_chats (id, notebook_id, role, content, sources_used) VALUES (?, ?, ?, ?, ?)')
+      .run(genId(), req.params.id, 'assistant', fullContent, JSON.stringify(sourcesUsed));
+    db.prepare('UPDATE notebooks SET updated_at=? WHERE id=?').run(now(), req.params.id);
+
+    send({ type: 'done', sources: sourcesUsed });
+    res.end();
+  } catch (e) {
+    send({ type: 'error', message: e.message });
+    res.end();
+  }
+});
+
+// ── Summary endpoint ─────────────────────────────────────────
+app.post('/api/notebooks/:id/summarize', async (req, res) => {
+  if (!process.env.OPENAI_API_KEY) return res.status(503).json({ error: 'OPENAI_API_KEY chưa được cấu hình' });
+  const sources = db.prepare('SELECT original_name, content_text FROM notebook_sources WHERE notebook_id = ?').all(req.params.id);
+  if (!sources.length) return res.status(400).json({ error: 'Chưa có tài liệu nào' });
+
+  const combined = sources.map(s => `## ${s.original_name}\n${s.content_text?.slice(0, 2000)}`).join('\n\n');
+  try {
+    const r = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'Tóm tắt toàn bộ tài liệu bằng tiếng Việt. Liệt kê các điểm chính dưới dạng bullet points.' },
+        { role: 'user', content: combined },
+      ],
+      max_tokens: 800,
+    });
+    res.json({ summary: r.choices[0]?.message?.content || '' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Serve frontend for all non-API routes
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));

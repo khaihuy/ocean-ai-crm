@@ -158,7 +158,60 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_activities_entity ON activities(entity_type, entity_id);
   CREATE INDEX IF NOT EXISTS idx_cosing_inci ON cosing_ingredients(inci_name);
   CREATE INDEX IF NOT EXISTS idx_cosing_cas ON cosing_ingredients(cas_no);
+
+  -- ============================================================
+  -- NOTEBOOK AI
+  -- ============================================================
+  CREATE TABLE IF NOT EXISTS notebooks (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS notebook_sources (
+    id TEXT PRIMARY KEY,
+    notebook_id TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    file_type TEXT,
+    file_size INTEGER DEFAULT 0,
+    content_text TEXT,
+    summary TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS notebook_chats (
+    id TEXT PRIMARY KEY,
+    notebook_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    sources_used TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_nb_sources ON notebook_sources(notebook_id);
+  CREATE INDEX IF NOT EXISTS idx_nb_chats ON notebook_chats(notebook_id);
 `);
+
+// Migration: create FTS5 virtual table for notebook chunks
+{
+  const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map(r => r.name);
+  if (!tables.includes('notebook_chunks_fts')) {
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS notebook_chunks_fts USING fts5(
+        chunk_text,
+        source_id UNINDEXED,
+        notebook_id UNINDEXED,
+        chunk_index UNINDEXED,
+        tokenize = 'unicode61'
+      );
+    `);
+  }
+}
 
 // Migration: move any existing kr_ingredients rows into country_ingredients
 {
