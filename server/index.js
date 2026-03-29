@@ -1,17 +1,84 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const crypto = require('crypto');
 const { parse: csvParseSync } = require('csv-parse/sync');
 const db = require('./database');
+const logger = require('./logger');
+const { errorHandler, notFound } = require('./middleware/errorHandler');
+const { authenticate } = require('./middleware/auth');
+const authRouter = require('./routes/auth');
+const aiRouter = require('./routes/ai');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(cors());
-app.use(express.json());
+// ── Security middleware ──────────────────────────────────────
+app.use(helmet({
+  contentSecurityPolicy: false, // Allow inline scripts in SPA
+  crossOriginEmbedderPolicy: false,
+}));
+
+const allowedOrigins = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(',')
+  : ['http://localhost:3000', 'http://localhost:5173'];
+
+app.use(cors({
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
+    cb(new Error(`CORS policy blocked: ${origin}`));
+  },
+  credentials: true,
+}));
+
+// ── Rate limiting ────────────────────────────────────────────
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 200,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Quá nhiều yêu cầu, vui lòng thử lại sau.' },
+});
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Quá nhiều lần đăng nhập, vui lòng thử lại sau 15 phút.' },
+});
+
+app.use('/api/', apiLimiter);
+app.use('/api/auth/login', authLimiter);
+
+// ── Body parsing ─────────────────────────────────────────────
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// ── Request logging ──────────────────────────────────────────
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const ms = Date.now() - start;
+    if (req.path.startsWith('/api/')) {
+      logger.debug(`${req.method} ${req.path} ${res.statusCode} ${ms}ms`);
+    }
+  });
+  next();
+});
+
+// ── Health check ─────────────────────────────────────────────
+app.get('/api/health', (req, res) => {
+  const clientCount = db.prepare('SELECT COUNT(*) as c FROM clients').get().c;
+  res.json({ status: 'ok', version: '2.0.0', db_clients: clientCount, timestamp: new Date().toISOString() });
+});
+
+// ── Auth & AI routes (no global auth required) ───────────────
+app.use('/api/auth', authRouter);
+app.use('/api/ai', aiRouter);
 
 const genId = () => crypto.randomUUID().replace(/-/g, '').slice(0, 12);
 const now = () => new Date().toISOString();
@@ -746,12 +813,16 @@ app.delete('/api/cosing/clear', (req, res) => {
 
 // Serve frontend for all non-API routes
 app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) return notFound(req, res);
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
+// ── Global error handler (must be last) ─────────────────────
+app.use(errorHandler);
+
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`🚀 OCEAN AI CRM running on port ${PORT}`);
-  console.log(`📊 Dashboard: http://localhost:${PORT}`);
+  logger.info(`OCEAN AI CRM v2.0 running on port ${PORT}`);
+  logger.info(`Dashboard: http://localhost:${PORT}`);
 });
 
 module.exports = app;
