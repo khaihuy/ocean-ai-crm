@@ -84,7 +84,7 @@ app.use((req, res, next) => {
 
 // ── Health check ─────────────────────────────────────────────
 app.get('/api/health', async (req, res) => {
-  const clientCount = await db.prepare('SELECT COUNT(*) as c FROM clients').get().c;
+  const clientCount = (await db.prepare('SELECT COUNT(*) as c FROM clients').get()).c;
   res.json({ status: 'ok', version: '2.0.0', db_clients: clientCount, timestamp: new Date().toISOString() });
 });
 
@@ -220,7 +220,7 @@ app.post('/api/payments', async (req, res) => {
   const { contract_id, amount, payment_date, method, reference_no, notes } = req.body;
   await db.prepare('INSERT INTO payments (id, contract_id, amount, payment_date, method, reference_no, notes) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, contract_id, amount, payment_date, method, reference_no, notes);
   // Update contract paid amount
-  const total = await db.prepare('SELECT SUM(amount) as total FROM payments WHERE contract_id = ?').get(contract_id).total || 0;
+  const total = (await db.prepare('SELECT SUM(amount) as total FROM payments WHERE contract_id = ?').get(contract_id)).total || 0;
   const contract = await db.prepare('SELECT value FROM contracts WHERE id = ?').get(contract_id);
   const paymentStatus = total >= contract.value ? 'Đã thanh toán' : total > 0 ? 'Thanh toán một phần' : 'Chưa thanh toán';
   await db.prepare('UPDATE contracts SET paid_amount = ?, payment_status = ? WHERE id = ?').run(total, paymentStatus, contract_id);
@@ -233,24 +233,24 @@ app.post('/api/payments', async (req, res) => {
 app.get('/api/dashboard', async (req, res) => {
   const stats = {
     clients: {
-      total: await db.prepare('SELECT COUNT(*) as c FROM clients').get().c,
-      active: await db.prepare("SELECT COUNT(*) as c FROM clients WHERE status = 'Đang hoạt động'").get().c,
-      potential: await db.prepare("SELECT COUNT(*) as c FROM clients WHERE status = 'Tiềm năng'").get().c,
+      total: (await db.prepare('SELECT COUNT(*) as c FROM clients').get()).c,
+      active: (await db.prepare("SELECT COUNT(*) as c FROM clients WHERE status = 'Đang hoạt động'").get()).c,
+      potential: (await db.prepare("SELECT COUNT(*) as c FROM clients WHERE status = 'Tiềm năng'").get()).c,
       by_country: await db.prepare('SELECT country, COUNT(*) as count FROM clients GROUP BY country ORDER BY count DESC').all(),
       by_industry: await db.prepare('SELECT industry, COUNT(*) as count FROM clients GROUP BY industry ORDER BY count DESC').all(),
     },
     contracts: {
-      total: await db.prepare('SELECT COUNT(*) as c FROM contracts').get().c,
-      active: await db.prepare("SELECT COUNT(*) as c FROM contracts WHERE status = 'Đang thực hiện'").get().c,
-      total_value: await db.prepare('SELECT COALESCE(SUM(value), 0) as v FROM contracts').get().v,
-      total_paid: await db.prepare('SELECT COALESCE(SUM(paid_amount), 0) as v FROM contracts').get().v,
+      total: (await db.prepare('SELECT COUNT(*) as c FROM contracts').get()).c,
+      active: (await db.prepare("SELECT COUNT(*) as c FROM contracts WHERE status = 'Đang thực hiện'").get()).c,
+      total_value: (await db.prepare('SELECT COALESCE(SUM(value), 0) as v FROM contracts').get()).v,
+      total_paid: (await db.prepare('SELECT COALESCE(SUM(paid_amount), 0) as v FROM contracts').get()).v,
       by_service: await db.prepare('SELECT service_type, COUNT(*) as count, SUM(value) as total_value FROM contracts GROUP BY service_type ORDER BY count DESC').all(),
       by_status: await db.prepare('SELECT status, COUNT(*) as count FROM contracts GROUP BY status').all(),
     },
     cases: {
-      total: await db.prepare('SELECT COUNT(*) as c FROM cases').get().c,
-      active: await db.prepare("SELECT COUNT(*) as c FROM cases WHERE status NOT IN ('Đã cấp phép', 'Từ chối')").get().c,
-      urgent: await db.prepare("SELECT COUNT(*) as c FROM cases WHERE priority = 'Cao' AND status NOT IN ('Đã cấp phép', 'Từ chối')").get().c,
+      total: (await db.prepare('SELECT COUNT(*) as c FROM cases').get()).c,
+      active: (await db.prepare("SELECT COUNT(*) as c FROM cases WHERE status NOT IN ('Đã cấp phép', 'Từ chối')").get()).c,
+      urgent: (await db.prepare("SELECT COUNT(*) as c FROM cases WHERE priority = 'Cao' AND status NOT IN ('Đã cấp phép', 'Từ chối')").get()).c,
       by_status: await db.prepare('SELECT status, COUNT(*) as count FROM cases GROUP BY status').all(),
       upcoming_deadlines: await db.prepare("SELECT cs.*, ct.contract_no, cl.name as client_name FROM cases cs LEFT JOIN contracts ct ON cs.contract_id = ct.id LEFT JOIN clients cl ON ct.client_id = cl.id WHERE cs.deadline IS NOT NULL AND cs.status NOT IN ('Đã cấp phép', 'Từ chối') AND cs.deadline >= CURRENT_DATE AND cs.deadline <= CURRENT_DATE + INTERVAL '30 days' ORDER BY cs.deadline ASC").all(),
     },
@@ -368,16 +368,16 @@ app.get('/api/cosing/search', async (req, res) => {
 
 app.get('/api/cosing/stats', async (req, res) => {
   res.json({
-    total: await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c,
+    total: (await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get()).c,
     by_annex: await db.prepare("SELECT annex, COUNT(*) as count FROM cosing_ingredients GROUP BY annex ORDER BY count DESC").all(),
   });
 });
 
 // GET /api/ingredients/total — tổng số thành phần toàn hệ thống
 app.get('/api/ingredients/total', async (req, res) => {
-  const cosing     = await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
-  const countryReg = await db.prepare('SELECT COUNT(DISTINCT LOWER(TRIM(inci_name))) as c FROM country_regs').get().c;
-  const countryDb  = await db.prepare('SELECT COUNT(*) as c FROM country_ingredients').get().c;
+  const cosing     = (await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get()).c;
+  const countryReg = (await db.prepare('SELECT COUNT(DISTINCT LOWER(TRIM(inci_name))) as c FROM country_regs').get()).c;
+  const countryDb  = (await db.prepare('SELECT COUNT(*) as c FROM country_ingredients').get()).c;
   const byCountry  = await db.prepare('SELECT country, COUNT(*) as count FROM country_ingredients GROUP BY country ORDER BY count DESC').all();
   res.json({
     cosing_eu: cosing,
@@ -579,7 +579,7 @@ app.post('/api/cosing/import-csv', async (req, res) => {
   tx();
 
   invalidateInciCache();
-  const total = await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
+  const total = (await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get()).c;
   res.json({ imported, skipped, total_in_db: total });
 });
 
@@ -678,7 +678,7 @@ app.get('/api/cosing/auto-import', async (req, res) => {
     }
 
     invalidateInciCache();
-    const total = await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
+    const total = (await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get()).c;
     send({ status: 'done', imported: totalImported, skipped: totalSkipped, total_in_db: total,
            msg: `Hoàn thành! ${totalImported.toLocaleString()} thành phần đã import. Tổng trong DB: ${total.toLocaleString()}` });
   } catch(e) {
@@ -805,7 +805,7 @@ app.post('/api/country-db/import', async (req, res) => {
   });
   tx();
 
-  const total = await db.prepare('SELECT COUNT(*) as c FROM country_ingredients WHERE country = ?').get(country).c;
+  const total = (await db.prepare('SELECT COUNT(*) as c FROM country_ingredients WHERE country = ?').get(country)).c;
   res.json({ imported, skipped, total_in_db: total, country });
 });
 
@@ -824,7 +824,7 @@ app.delete('/api/country-db/clear', async (req, res) => {
 // Legacy KR aliases
 app.get('/api/kr/search', (req, res) => res.redirect(`/api/country-db/search?country=KR&${new URLSearchParams(req.query)}`));
 app.get('/api/kr/stats', async (req, res) => {
-  const c = await db.prepare("SELECT COUNT(*) as c FROM country_ingredients WHERE country='KR'").get().c;
+  const c = (await db.prepare("SELECT COUNT(*) as c FROM country_ingredients WHERE country='KR'").get()).c;
   res.json({ total: c });
 });
 
@@ -835,7 +835,7 @@ app.delete('/api/cosing/clear', async (req, res) => {
   } else {
     await db.prepare('DELETE FROM cosing_ingredients').run();
   }
-  const total = await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
+  const total = (await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get()).c;
   res.json({ total_in_db: total });
 });
 
@@ -1009,7 +1009,7 @@ app.post('/api/notebooks/:id/chat', async (req, res) => {
   const nb = await db.prepare('SELECT * FROM notebooks WHERE id = ?').get(req.params.id);
   if (!nb) return res.status(404).json({ error: 'Notebook not found' });
 
-  const sourceCount = await db.prepare('SELECT COUNT(*) as c FROM notebook_sources WHERE notebook_id = ?').get(req.params.id).c;
+  const sourceCount = (await db.prepare('SELECT COUNT(*) as c FROM notebook_sources WHERE notebook_id = ?').get(req.params.id)).c;
 
   // Save user message
   await db.prepare('INSERT INTO notebook_chats (id, notebook_id, role, content) VALUES (?, ?, ?, ?)')
@@ -1213,22 +1213,22 @@ async function executeCrmTool(name, args) {
     case 'get_dashboard_stats': {
       return {
         clients: {
-          total:     await db.prepare('SELECT COUNT(*) as c FROM clients').get().c,
-          active:    await db.prepare("SELECT COUNT(*) as c FROM clients WHERE status='Đang hoạt động'").get().c,
-          potential: await db.prepare("SELECT COUNT(*) as c FROM clients WHERE status='Tiềm năng'").get().c,
+          total:     (await db.prepare('SELECT COUNT(*) as c FROM clients').get()).c,
+          active:    (await db.prepare("SELECT COUNT(*) as c FROM clients WHERE status='Đang hoạt động'").get()).c,
+          potential: (await db.prepare("SELECT COUNT(*) as c FROM clients WHERE status='Tiềm năng'").get()).c,
           by_country: await db.prepare('SELECT country, COUNT(*) as count FROM clients GROUP BY country ORDER BY count DESC LIMIT 8').all(),
         },
         contracts: {
-          total:       await db.prepare('SELECT COUNT(*) as c FROM contracts').get().c,
-          active:      await db.prepare("SELECT COUNT(*) as c FROM contracts WHERE status='Đang thực hiện'").get().c,
-          total_value: await db.prepare('SELECT COALESCE(SUM(value),0) as v FROM contracts').get().v,
-          total_paid:  await db.prepare('SELECT COALESCE(SUM(paid_amount),0) as v FROM contracts').get().v,
-          unpaid:      await db.prepare("SELECT COUNT(*) as c FROM contracts WHERE payment_status='Chưa thanh toán'").get().c,
+          total:       (await db.prepare('SELECT COUNT(*) as c FROM contracts').get()).c,
+          active:      (await db.prepare("SELECT COUNT(*) as c FROM contracts WHERE status='Đang thực hiện'").get()).c,
+          total_value: (await db.prepare('SELECT COALESCE(SUM(value),0) as v FROM contracts').get()).v,
+          total_paid:  (await db.prepare('SELECT COALESCE(SUM(paid_amount),0) as v FROM contracts').get()).v,
+          unpaid:      (await db.prepare("SELECT COUNT(*) as c FROM contracts WHERE payment_status='Chưa thanh toán'").get()).c,
         },
         cases: {
-          total:  await db.prepare('SELECT COUNT(*) as c FROM cases').get().c,
-          active: await db.prepare("SELECT COUNT(*) as c FROM cases WHERE status NOT IN ('Đã cấp phép','Từ chối')").get().c,
-          urgent: await db.prepare("SELECT COUNT(*) as c FROM cases WHERE priority='Cao' AND status NOT IN ('Đã cấp phép','Từ chối')").get().c,
+          total:  (await db.prepare('SELECT COUNT(*) as c FROM cases').get()).c,
+          active: (await db.prepare("SELECT COUNT(*) as c FROM cases WHERE status NOT IN ('Đã cấp phép','Từ chối')").get()).c,
+          urgent: (await db.prepare("SELECT COUNT(*) as c FROM cases WHERE priority='Cao' AND status NOT IN ('Đã cấp phép','Từ chối')").get()).c,
         },
       };
     }
@@ -1296,9 +1296,9 @@ async function executeCrmTool(name, args) {
 
     case 'get_revenue_report': {
       return {
-        total_value:   await db.prepare('SELECT COALESCE(SUM(value),0) as v FROM contracts').get().v,
-        total_paid:    await db.prepare('SELECT COALESCE(SUM(paid_amount),0) as v FROM contracts').get().v,
-        total_debt:    await db.prepare('SELECT COALESCE(SUM(value - paid_amount),0) as v FROM contracts WHERE status != \'Hủy\'').get().v,
+        total_value:   (await db.prepare('SELECT COALESCE(SUM(value),0) as v FROM contracts').get()).v,
+        total_paid:    (await db.prepare('SELECT COALESCE(SUM(paid_amount),0) as v FROM contracts').get()).v,
+        total_debt:    (await db.prepare('SELECT COALESCE(SUM(value - paid_amount),0) as v FROM contracts WHERE status != \'Hủy\'').get()).v,
         by_service:    await db.prepare('SELECT service_type, COUNT(*) as count, SUM(value) as total, SUM(paid_amount) as paid FROM contracts GROUP BY service_type ORDER BY total DESC').all(),
         by_country:    await db.prepare('SELECT cl.country, SUM(ct.value) as total, SUM(ct.paid_amount) as paid FROM contracts ct LEFT JOIN clients cl ON ct.client_id = cl.id GROUP BY cl.country ORDER BY total DESC').all(),
         by_status:     await db.prepare('SELECT status, COUNT(*) as count, SUM(value) as total FROM contracts GROUP BY status').all(),
