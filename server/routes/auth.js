@@ -2,7 +2,7 @@ const express = require('express');
 const bcrypt = require('bcryptjs');
 const { z } = require('zod');
 const crypto = require('crypto');
-const db = require('../database');
+const db = require('../db');
 const { signToken, authenticate } = require('../middleware/auth');
 const logger = require('../logger');
 
@@ -29,24 +29,33 @@ const ChangePasswordSchema = z.object({
 });
 
 // ── Ensure at least one admin exists (initial setup) ─────────
-function ensureDefaultAdmin() {
-  const count = db.prepare('SELECT COUNT(*) as c FROM users').get().c;
-  if (count === 0) {
-    const hash = bcrypt.hashSync('Admin@123', 12);
-    db.prepare(
-      'INSERT INTO users (id, username, email, password_hash, full_name, role) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(genId(), 'admin', 'admin@ocean-ai.vn', hash, 'Quản trị viên', 'admin');
-    logger.info('Default admin account created: admin / Admin@123');
+async function ensureDefaultAdmin() {
+  try {
+    const row = await db.get('SELECT COUNT(*) as c FROM users');
+    const count = parseInt(row.c, 10);
+    if (count === 0) {
+      const hash = await bcrypt.hash('Admin@123', 12);
+      await db.run(
+        'INSERT INTO users (id, username, email, password_hash, full_name, role) VALUES (?, ?, ?, ?, ?, ?)',
+        [genId(), 'admin', 'admin@ocean-ai.vn', hash, 'Quản trị viên', 'admin']
+      );
+      logger.info('Default admin account created: admin / Admin@123');
+    }
+  } catch (err) {
+    logger.error('ensureDefaultAdmin error:', err);
   }
 }
 ensureDefaultAdmin();
 
 // ── POST /api/auth/register ───────────────────────────────────
-router.post('/register', (req, res, next) => {
+router.post('/register', async (req, res, next) => {
   try {
     const body = RegisterSchema.parse(req.body);
 
-    const exists = db.prepare('SELECT id FROM users WHERE username = ? OR email = ?').get(body.username, body.email);
+    const exists = await db.get(
+      'SELECT id FROM users WHERE username = ? OR email = ?',
+      [body.username, body.email]
+    );
     if (exists) {
       return res.status(409).json({ error: 'Username hoặc email đã tồn tại.' });
     }
@@ -54,14 +63,18 @@ router.post('/register', (req, res, next) => {
     // Only admin can create admin/manager accounts
     const role = body.role || 'staff';
 
-    const hash = bcrypt.hashSync(body.password, 12);
+    const hash = await bcrypt.hash(body.password, 12);
     const id = genId();
-    db.prepare(
-      'INSERT INTO users (id, username, email, password_hash, full_name, role) VALUES (?, ?, ?, ?, ?, ?)'
-    ).run(id, body.username, body.email, hash, body.full_name || null, role);
+    await db.run(
+      'INSERT INTO users (id, username, email, password_hash, full_name, role) VALUES (?, ?, ?, ?, ?, ?)',
+      [id, body.username, body.email, hash, body.full_name || null, role]
+    );
 
     logger.info(`New user registered: ${body.username} (${role})`);
-    const user = db.prepare('SELECT id, username, email, full_name, role, created_at FROM users WHERE id = ?').get(id);
+    const user = await db.get(
+      'SELECT id, username, email, full_name, role, created_at FROM users WHERE id = ?',
+      [id]
+    );
     const token = signToken({ id: user.id, username: user.username, role: user.role });
     res.status(201).json({ user, token });
   } catch (err) {
@@ -73,20 +86,21 @@ router.post('/register', (req, res, next) => {
 });
 
 // ── POST /api/auth/login ──────────────────────────────────────
-router.post('/login', (req, res, next) => {
+router.post('/login', async (req, res, next) => {
   try {
     const body = LoginSchema.parse(req.body);
 
-    const user = db.prepare(
-      'SELECT * FROM users WHERE (username = ? OR email = ?) AND is_active = 1'
-    ).get(body.username, body.username);
+    const user = await db.get(
+      'SELECT * FROM users WHERE (username = ? OR email = ?) AND is_active = 1',
+      [body.username, body.username]
+    );
 
-    if (!user || !bcrypt.compareSync(body.password, user.password_hash)) {
+    if (!user || !(await bcrypt.compare(body.password, user.password_hash))) {
       logger.warn(`Failed login attempt for: ${body.username}`, { ip: req.ip });
       return res.status(401).json({ error: 'Tên đăng nhập hoặc mật khẩu không đúng.' });
     }
 
-    db.prepare("UPDATE users SET last_login = datetime('now') WHERE id = ?").run(user.id);
+    await db.run('UPDATE users SET last_login = NOW() WHERE id = ?', [user.id]);
 
     const token = signToken({ id: user.id, username: user.username, role: user.role });
     logger.info(`User logged in: ${user.username}`);
@@ -109,24 +123,32 @@ router.post('/login', (req, res, next) => {
 });
 
 // ── GET /api/auth/me ──────────────────────────────────────────
-router.get('/me', authenticate, (req, res) => {
-  const user = db.prepare(
-    'SELECT id, username, email, full_name, role, last_login, created_at FROM users WHERE id = ?'
-  ).get(req.user.id);
-  if (!user) return res.status(404).json({ error: 'Tài khoản không tồn tại.' });
-  res.json(user);
+router.get('/me', authenticate, async (req, res, next) => {
+  try {
+    const user = await db.get(
+      'SELECT id, username, email, full_name, role, last_login, created_at FROM users WHERE id = ?',
+      [req.user.id]
+    );
+    if (!user) return res.status(404).json({ error: 'Tài khoản không tồn tại.' });
+    res.json(user);
+  } catch (err) {
+    next(err);
+  }
 });
 
 // ── PUT /api/auth/change-password ────────────────────────────
-router.put('/change-password', authenticate, (req, res, next) => {
+router.put('/change-password', authenticate, async (req, res, next) => {
   try {
     const body = ChangePasswordSchema.parse(req.body);
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
-    if (!user || !bcrypt.compareSync(body.current_password, user.password_hash)) {
+    const user = await db.get('SELECT * FROM users WHERE id = ?', [req.user.id]);
+    if (!user || !(await bcrypt.compare(body.current_password, user.password_hash))) {
       return res.status(401).json({ error: 'Mật khẩu hiện tại không đúng.' });
     }
-    const newHash = bcrypt.hashSync(body.new_password, 12);
-    db.prepare("UPDATE users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").run(newHash, user.id);
+    const newHash = await bcrypt.hash(body.new_password, 12);
+    await db.run(
+      'UPDATE users SET password_hash = ?, updated_at = NOW() WHERE id = ?',
+      [newHash, user.id]
+    );
     res.json({ success: true, message: 'Đổi mật khẩu thành công.' });
   } catch (err) {
     if (err instanceof z.ZodError) {
@@ -137,29 +159,40 @@ router.put('/change-password', authenticate, (req, res, next) => {
 });
 
 // ── GET /api/auth/users (admin only) ─────────────────────────
-router.get('/users', authenticate, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Chỉ admin mới có quyền xem danh sách người dùng.' });
+router.get('/users', authenticate, async (req, res, next) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Chỉ admin mới có quyền xem danh sách người dùng.' });
+    }
+    const users = await db.all(
+      'SELECT id, username, email, full_name, role, is_active, last_login, created_at FROM users ORDER BY created_at DESC'
+    );
+    res.json(users);
+  } catch (err) {
+    next(err);
   }
-  const users = db.prepare(
-    'SELECT id, username, email, full_name, role, is_active, last_login, created_at FROM users ORDER BY created_at DESC'
-  ).all();
-  res.json(users);
 });
 
 // ── PUT /api/auth/users/:id/toggle (admin only) ──────────────
-router.put('/users/:id/toggle', authenticate, (req, res) => {
-  if (req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Không có quyền.' });
+router.put('/users/:id/toggle', authenticate, async (req, res, next) => {
+  try {
+    if (req.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Không có quyền.' });
+    }
+    if (req.params.id === req.user.id) {
+      return res.status(400).json({ error: 'Không thể vô hiệu hóa tài khoản của chính mình.' });
+    }
+    const user = await db.get('SELECT * FROM users WHERE id = ?', [req.params.id]);
+    if (!user) return res.status(404).json({ error: 'Tài khoản không tồn tại.' });
+    const newStatus = user.is_active ? 0 : 1;
+    await db.run(
+      'UPDATE users SET is_active = ?, updated_at = NOW() WHERE id = ?',
+      [newStatus, req.params.id]
+    );
+    res.json({ success: true, is_active: !!newStatus });
+  } catch (err) {
+    next(err);
   }
-  if (req.params.id === req.user.id) {
-    return res.status(400).json({ error: 'Không thể vô hiệu hóa tài khoản của chính mình.' });
-  }
-  const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id);
-  if (!user) return res.status(404).json({ error: 'Tài khoản không tồn tại.' });
-  const newStatus = user.is_active ? 0 : 1;
-  db.prepare("UPDATE users SET is_active = ?, updated_at = datetime('now') WHERE id = ?").run(newStatus, req.params.id);
-  res.json({ success: true, is_active: !!newStatus });
 });
 
 module.exports = router;
