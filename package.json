@@ -1,6 +1,6 @@
 {
   "name": "ocean-ai-crm-fdi",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "OCEAN AI - CRM Tư vấn Đầu tư FDI vào Việt Nam",
   "main": "server/index.js",
   "scripts": {
@@ -18,6 +18,9 @@
     "express-rate-limit": "^7.5.0",
     "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
+    "multer": "^2.1.1",
+    "openai": "^6.33.0",
+    "pdf-parse": "^1.1.1",
     "winston": "^3.17.0",
     "zod": "^3.24.2"
   },

@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>OCEAN AI - CRM Tư vấn Đầu tư FDI</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:'Inter',sans-serif;background:#f8fafc;color:#111827;min-height:100vh;display:flex}
@@ -86,8 +87,7 @@ table tr:hover{background:var(--gray-light)}
 .avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;cursor:pointer}
 .info-panel{background:var(--primary-light);border-radius:12px;padding:16px;margin-bottom:16px}
 @media(max-width:768px){.sidebar{width:64px}.main{margin-left:64px}.grid-2{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}}
-
-/* ── Login overlay ───────────────────────────────────────── */
+/* Login */
 #login-overlay{position:fixed;inset:0;background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);display:flex;align-items:center;justify-content:center;z-index:9999}
 #login-overlay.hidden{display:none}
 .login-box{background:#fff;border-radius:20px;padding:40px;width:min(420px,95vw);box-shadow:0 24px 64px rgba(0,0,0,.4)}
@@ -95,25 +95,79 @@ table tr:hover{background:var(--gray-light)}
 .login-logo .brand{font-size:28px;font-weight:800;color:#1a56db}
 .login-logo .tagline{font-size:13px;color:var(--gray);margin-top:4px}
 .login-error{background:#fee2e2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none}
-
-/* ── AI Chatbot ──────────────────────────────────────────── */
-#ai-fab{position:fixed;bottom:28px;right:28px;z-index:500;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#1a56db,#7c3aed);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(26,86,219,.5);transition:transform .2s}
+/* AI FAB */
+#ai-fab{position:fixed;bottom:28px;right:28px;z-index:500;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#1a56db,#7c3aed);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(26,86,219,.5);transition:transform .2s}
 #ai-fab:hover{transform:scale(1.1)}
 #ai-fab.hidden{display:none}
-#ai-panel{position:fixed;bottom:96px;right:28px;z-index:500;width:min(400px,calc(100vw - 32px));background:#fff;border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,.2);display:flex;flex-direction:column;max-height:600px;border:1px solid var(--border);transition:opacity .2s,transform .2s;transform-origin:bottom right}
+#ai-panel{position:fixed;bottom:92px;right:28px;z-index:500;width:min(400px,calc(100vw - 32px));background:#fff;border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,.2);display:flex;flex-direction:column;max-height:560px;border:1px solid var(--border)}
 #ai-panel.hidden{display:none}
-.ai-header{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.ai-header .title{font-weight:700;font-size:14px;color:#1a56db}
-.ai-header .subtitle{font-size:11px;color:var(--gray)}
-.ai-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;min-height:200px;max-height:380px}
+.ai-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.ai-messages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;min-height:180px;max-height:360px}
 .ai-msg{max-width:85%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
 .ai-msg.user{background:#e8effe;color:#1e3a8a;align-self:flex-end;border-bottom-right-radius:4px}
 .ai-msg.bot{background:var(--gray-light);color:#111827;align-self:flex-start;border-bottom-left-radius:4px}
 .ai-msg.typing{color:var(--gray);font-style:italic}
-.ai-input-row{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px}
+.ai-input-row{padding:10px 14px;border-top:1px solid var(--border);display:flex;gap:8px}
 .ai-input-row input{flex:1;padding:8px 12px;border-radius:8px;border:1px solid var(--border);font-size:13px;outline:none;font-family:inherit}
 .ai-input-row button{padding:8px 14px;border-radius:8px;background:var(--primary);color:#fff;border:none;cursor:pointer;font-size:13px;font-weight:600}
-.ai-not-configured{padding:16px;font-size:13px;color:var(--gray);text-align:center}
+/* Notebook AI */
+.nb-layout{display:grid;grid-template-columns:280px 1fr;gap:16px;height:calc(100vh - 120px)}
+.nb-sidebar{display:flex;flex-direction:column;gap:8px;overflow-y:auto}
+.nb-card{background:#fff;border:1px solid var(--border);border-radius:10px;padding:14px;cursor:pointer;transition:all .15s}
+.nb-card:hover,.nb-card.active{border-color:var(--primary);box-shadow:0 0 0 2px var(--primary-light)}
+.nb-main{display:flex;flex-direction:column;background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.nb-chat-area{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.nb-msg{max-width:80%;padding:12px 16px;border-radius:12px;font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.nb-msg.user{align-self:flex-end;background:var(--primary);color:#fff;border-bottom-right-radius:4px}
+.nb-msg.assistant{align-self:flex-start;background:var(--gray-light);color:var(--dark);border-bottom-left-radius:4px}
+.nb-msg.assistant .nb-sources{margin-top:8px;padding-top:8px;border-top:1px solid var(--border);font-size:11px;color:var(--gray)}
+.nb-input-bar{display:flex;gap:8px;padding:14px;border-top:1px solid var(--border);background:#fff}
+.nb-input-bar textarea{flex:1;resize:none;border:1px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;outline:none;max-height:120px}
+.nb-sources-panel{border-top:1px solid var(--border);padding:12px 16px;background:var(--gray-light)}
+.nb-source-item{display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:#fff;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;font-size:12px}
+.nb-drop-zone{border:2px dashed var(--border);border-radius:10px;padding:24px;text-align:center;cursor:pointer;transition:.2s;font-size:13px}
+.nb-drop-zone:hover,.nb-drop-zone.drag-over{border-color:var(--primary);background:var(--primary-light)}
+/* Dashboard redesign */
+.dash-view-bar{display:flex;gap:3px;background:#f1f5f9;border-radius:8px;padding:3px}
+.dash-view-btn{padding:5px 14px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;color:#6b7280;transition:all .15s}
+.dash-view-btn.active{background:#fff;color:#111827;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.db-kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px;margin-bottom:16px}
+.db-kpi-card{background:#fff;border-radius:14px;border:1px solid #e5e7eb;padding:16px 18px;display:flex;align-items:center;gap:14px;transition:box-shadow .2s}
+.db-kpi-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.08)}
+.db-kpi-icon{width:48px;height:48px;border-radius:14px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.db-kpi-label{font-size:12px;color:#6b7280;font-weight:500;margin-bottom:2px}
+.db-kpi-value{font-size:24px;font-weight:700;line-height:1.2;margin-bottom:2px}
+.db-kpi-sub{font-size:11px;color:#9ca3af}
+.db-chart-grid{display:grid;gap:14px;margin-bottom:14px}
+.db-chart-grid-3{grid-template-columns:1fr 1fr 1fr}
+.db-chart-grid-2{grid-template-columns:2fr 1fr}
+.db-chart-card{background:#fff;border-radius:12px;border:1px solid #e5e7eb;padding:16px}
+.db-chart-title{font-size:13px;font-weight:600;margin-bottom:12px;color:#374151}
+.db-compact-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+.db-compact-card{background:#fff;border-radius:10px;border:1px solid #e5e7eb;padding:14px;text-align:center}
+.db-compact-val{font-size:28px;font-weight:700;line-height:1}
+.db-compact-lbl{font-size:11px;color:#6b7280;margin-top:4px}
+.db-compact-sub{font-size:11px;font-weight:600;margin-top:3px}
+.db-deadline-row{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:12px}
+.db-deadline-row:last-child{border:none}
+@media(max-width:900px){.db-chart-grid-3{grid-template-columns:1fr 1fr}.db-chart-grid-2{grid-template-columns:1fr}}
+@media(max-width:600px){.db-chart-grid-3{grid-template-columns:1fr}.db-kpi-grid{grid-template-columns:1fr 1fr}}
+.nb-typing::after{content:'▋';animation:blink .8s step-end infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+/* System Chat */
+.sc-wrap{display:flex;flex-direction:column;height:calc(100vh - 120px);background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.sc-chat{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px}
+.sc-msg{display:flex;gap:10px;align-items:flex-start}
+.sc-msg.user{flex-direction:row-reverse}
+.sc-avatar{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.sc-bubble{max-width:75%;padding:12px 16px;border-radius:14px;font-size:13px;line-height:1.65;white-space:pre-wrap;word-break:break-word}
+.sc-msg.user .sc-bubble{background:var(--primary);color:#fff;border-bottom-right-radius:4px}
+.sc-msg.assistant .sc-bubble{background:var(--gray-light);color:var(--dark);border-bottom-left-radius:4px}
+.sc-tool-badge{display:inline-block;background:var(--info-light);color:var(--info);border-radius:6px;padding:2px 8px;font-size:11px;margin-bottom:4px}
+.sc-bar{display:flex;gap:8px;padding:14px 16px;border-top:1px solid var(--border)}
+.sc-bar input{flex:1;padding:10px 14px;border:1px solid var(--border);border-radius:24px;font-size:13px;outline:none;transition:.2s}
+.sc-bar input:focus{border-color:var(--primary)}
+.sc-suggestions{display:flex;flex-wrap:wrap;gap:8px;padding:0 20px 14px}
 </style>
 </head>
 <body>
@@ -126,21 +180,13 @@ table tr:hover{background:var(--gray-light)}
     </div>
     <div class="login-error" id="loginError"></div>
     <form id="loginForm" onsubmit="doLogin(event)">
-      <div class="form-group">
-        <label>Tên đăng nhập / Email</label>
-        <input id="loginUser" name="username" type="text" placeholder="admin" required autocomplete="username">
-      </div>
-      <div class="form-group">
-        <label>Mật khẩu</label>
-        <input id="loginPass" name="password" type="password" placeholder="••••••••" required autocomplete="current-password">
-      </div>
-      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;padding:12px" id="loginBtn">
-        Đăng nhập
-      </button>
+      <div class="form-group"><label>Tên đăng nhập / Email</label>
+        <input id="loginUser" name="username" type="text" placeholder="admin" required autocomplete="username"></div>
+      <div class="form-group"><label>Mật khẩu</label>
+        <input id="loginPass" name="password" type="password" placeholder="••••••••" required autocomplete="current-password"></div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;padding:12px" id="loginBtn">Đăng nhập</button>
     </form>
-    <p style="margin-top:16px;font-size:12px;color:var(--gray);text-align:center">
-      Tài khoản mặc định: <strong>admin</strong> / <strong>Admin@123</strong>
-    </p>
+    <p style="margin-top:16px;font-size:12px;color:var(--gray);text-align:center">Tài khoản mặc định: <strong>admin</strong> / <strong>Admin@123</strong></p>
   </div>
 </div>
 
@@ -175,8 +221,16 @@ table tr:hover{background:var(--gray-light)}
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <span>Tra cứu</span>
     </button>
+    <button class="nav-item" data-page="chat" onclick="navigate('chat',this)">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span>Chat AI</span>
+    </button>
+    <button class="nav-item" data-page="notebook" onclick="navigate('notebook',this)">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8zm0-14a1 1 0 0 0-1 1v4H7a1 1 0 0 0 0 2h4v4a1 1 0 0 0 2 0v-4h4a1 1 0 0 0 0-2h-4V7a1 1 0 0 0-1-1z"/></svg>
+      <span>Notebook AI</span>
+    </button>
     <button class="nav-item" id="nav-users" data-page="users" onclick="navigate('users',this)" style="display:none">
-      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm-7 14a7 7 0 0 1 14 0"/><circle cx="19" cy="8" r="3"/><path d="M22 21a4 4 0 0 0-7-2.7"/></svg>
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       <span>Người dùng</span>
     </button>
   </nav>
@@ -191,10 +245,8 @@ table tr:hover{background:var(--gray-light)}
     </div>
     <div class="flex items-center gap-12">
       <span class="fs-13 text-gray" id="currentDate"></span>
-      <div id="userBadge" class="flex items-center gap-8">
-        <span class="fs-12 text-gray" id="userName"></span>
-        <div class="avatar" id="userAvatar" title="Đăng xuất" onclick="doLogout()">KG</div>
-      </div>
+      <span class="fs-12 text-gray" id="userName"></span>
+      <div class="avatar" id="userAvatar" title="Đăng xuất" onclick="doLogout()">KG</div>
     </div>
   </header>
   <main class="content" id="content">
@@ -214,12 +266,7 @@ async function api(url, opts = {}) {
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
   if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(API + url, { ...opts, headers });
-  if (res.status === 401) {
-    localStorage.removeItem('ocean_crm_token');
-    localStorage.removeItem('ocean_crm_user');
-    location.reload();
-    return {};
-  }
+  if (res.status === 401) { localStorage.removeItem('ocean_crm_token'); localStorage.removeItem('ocean_crm_user'); location.reload(); return {}; }
   return res.json();
 }
 
@@ -279,80 +326,177 @@ async function render() {
   await loadData();
   const el = document.getElementById('content');
   switch (currentPage) {
-    case 'dashboard': el.innerHTML = renderDashboard(); break;
+    case 'dashboard': Object.values(_chartInst).forEach(c=>c.destroy()); _chartInst={}; el.innerHTML = renderDashboard(); loadCosingStats(); if(_dashView==='overview') setTimeout(()=>_initCharts(state.dashboard),50); break;
     case 'clients': el.innerHTML = renderClients(); break;
     case 'contracts': el.innerHTML = renderContracts(); break;
     case 'cases': el.innerHTML = renderCases(); break;
     case 'finance': el.innerHTML = renderFinance(); break;
     case 'search': el.innerHTML = renderSearch(); break;
-    case 'users': el.innerHTML = await renderUsers(); break;
+    case 'chat':     el.innerHTML = renderChatPage(); initChatPage(); break;
+    case 'notebook': el.innerHTML = renderNotebookList(); initNotebookPage(); break;
+    case 'users':    renderUsers().then(html => { el.innerHTML = html; }); break;
   }
 }
 
 function renderDashboard() {
   const d = state.dashboard;
   if (!d) return '<div class="text-gray">Đang tải...</div>';
-  const totalDebt = d.contracts.total_value - d.contracts.total_paid;
-  const collectRate = d.contracts.total_value > 0 ? Math.round(d.contracts.total_paid / d.contracts.total_value * 100) : 0;
-
   return `
-    <h2 class="mb-24" style="font-size:22px">Dashboard Tổng Quan</h2>
-    <div class="stat-grid">
-      ${statCard('Tổng khách hàng', d.clients.total, `${d.clients.active} đang hoạt động`, 'var(--primary)', '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>')}
-      ${statCard('Hợp đồng', d.contracts.total, `${d.contracts.active} đang thực hiện`, 'var(--success)', '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>')}
-      ${statCard('Hồ sơ đang xử lý', d.cases.active, `${d.cases.urgent} ưu tiên cao`, 'var(--warning)', '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>')}
-      ${statCard('Doanh thu', fmt(d.contracts.total_value), `Công nợ: ${fmt(totalDebt)}`, 'var(--info)', '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>')}
-    </div>
-    <div class="grid-2">
-      <div class="card">
-        <h3 class="fs-15 mb-16">Hồ sơ sắp đến hạn (30 ngày tới)</h3>
-        ${d.cases.upcoming_deadlines.length === 0 ? '<div class="text-gray fs-13">Không có hồ sơ nào sắp đến hạn</div>' :
-          d.cases.upcoming_deadlines.map(c => `
-            <div class="flex justify-between items-center" style="padding:8px 0;border-bottom:1px solid var(--border)">
-              <div><div class="fs-13 fw-600">${c.case_name}</div><div class="fs-12 text-gray">${c.client_name || ''}</div></div>
-              <div class="text-right">${badge(c.status)}<div class="fs-12 text-danger mt-8">Hạn: ${fmtDate(c.deadline)}</div></div>
-            </div>`).join('')}
-      </div>
-      <div class="card">
-        <h3 class="fs-15 mb-16">Phân bố theo quốc gia</h3>
-        ${d.clients.by_country.slice(0, 6).map(c => `
-          <div class="flex items-center gap-12" style="margin-bottom:10px">
-            <div style="width:100px" class="fs-13 fw-600">${c.country}</div>
-            <div style="flex:1">${progressBar(c.count / d.clients.total * 100)}</div>
-            <div class="fs-13 fw-600" style="min-width:24px;text-align:right">${c.count}</div>
-          </div>`).join('')}
+    <div class="flex justify-between items-center mb-20">
+      <div><h2 style="font-size:22px;font-weight:700">Dashboard</h2><div class="fs-12 text-gray mt-4">${new Date().toLocaleDateString('vi-VN',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}</div></div>
+      <div class="dash-view-bar">
+        <button class="dash-view-btn ${_dashView==='overview'?'active':''}" onclick="setDashView('overview')">Tổng quan</button>
+        <button class="dash-view-btn ${_dashView==='compact'?'active':''}" onclick="setDashView('compact')">Gọn</button>
+        <button class="dash-view-btn ${_dashView==='detailed'?'active':''}" onclick="setDashView('detailed')">Chi tiết</button>
       </div>
     </div>
-    <div class="grid-2 mt-16">
-      <div class="card">
-        <h3 class="fs-15 mb-16">Dịch vụ phổ biến</h3>
-        ${d.contracts.by_service.slice(0, 5).map(s => `
-          <div class="flex justify-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
-            <span>${s.service_type}</span><span class="fw-600 text-primary">${s.count} HĐ</span>
-          </div>`).join('')}
-      </div>
-      <div class="card">
-        <h3 class="fs-15 mb-16">Tình hình thanh toán</h3>
-        <div style="margin-bottom:12px">
-          <div class="flex justify-between fs-13" style="margin-bottom:4px"><span>Đã thu</span><span class="fw-600 text-success">${fmt(d.contracts.total_paid)}</span></div>
-          ${progressBar(collectRate)}
-        </div>
-        <div style="margin-bottom:12px">
-          <div class="flex justify-between fs-13" style="margin-bottom:4px"><span>Công nợ</span><span class="fw-600 text-danger">${fmt(totalDebt)}</span></div>
-          ${progressBar(100 - collectRate)}
-        </div>
-        <div style="margin-top:12px;padding:10px;background:var(--gray-light);border-radius:8px;font-size:13px">
-          <div class="flex justify-between"><span class="fw-600">Tổng giá trị HĐ:</span><span class="fw-700 text-primary">${fmt(d.contracts.total_value)}</span></div>
-          <div class="flex justify-between mt-8"><span>Tỷ lệ thu hồi:</span><span class="fw-600">${collectRate}%</span></div>
-        </div>
-      </div>
-    </div>`;
+    <div id="dashContent">${_dashView==='overview'?_dbOverview(d):_dashView==='compact'?_dbCompact(d):_dbDetailed(d)}</div>`;
 }
 
-function statCard(label, value, sub, color, iconPath) {
-  return `<div class="card stat-card"><div class="stat-icon" style="background:${color}22;color:${color}">
-    <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">${iconPath}</svg>
-  </div><div><div class="stat-label">${label}</div><div class="stat-value">${value}</div>${sub ? `<div class="stat-sub">${sub}</div>` : ''}</div></div>`;
+let _dashView = 'overview';
+let _chartInst = {};
+function setDashView(v) { _dashView = v; Object.values(_chartInst).forEach(c=>c.destroy()); _chartInst={}; document.getElementById('dashContent').innerHTML = _dashView==='overview'?_dbOverview(state.dashboard):_dashView==='compact'?_dbCompact(state.dashboard):_dbDetailed(state.dashboard); if(v==='overview') _initCharts(state.dashboard); loadCosingStats(); }
+
+const _CHART_COLORS = ['#6366f1','#0ea5e9','#10b981','#f59e0b','#ef4444','#8b5cf6','#ec4899','#14b8a6','#f97316','#84cc16'];
+function fmtShort(n){if(n>=1e9)return(n/1e9).toFixed(1)+' tỷ';if(n>=1e6)return(n/1e6).toFixed(0)+' tr';if(n>=1e3)return(n/1e3).toFixed(0)+'K';return n.toLocaleString();}
+
+function kpiCard(label, value, sub, bg, iconPath, textColor) {
+  return `<div class="db-kpi-card">
+    <div class="db-kpi-icon" style="background:${bg}">
+      <svg width="22" height="22" fill="none" stroke="${textColor}" stroke-width="2" viewBox="0 0 24 24"><path d="${iconPath}"/></svg>
+    </div>
+    <div>
+      <div class="db-kpi-label">${label}</div>
+      <div class="db-kpi-value" style="color:${textColor}">${value}</div>
+      <div class="db-kpi-sub">${sub}</div>
+    </div>
+  </div>`;
+}
+
+function _dbOverview(d) {
+  const debt = d.contracts.total_value - d.contracts.total_paid;
+  const cr = d.contracts.total_value > 0 ? Math.round(d.contracts.total_paid/d.contracts.total_value*100) : 0;
+  return `
+  <div class="db-kpi-grid">
+    ${kpiCard('Khách hàng',''+d.clients.total,d.clients.active+' đang hoạt động','#ede9fe','M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 8 0 4 4 0 0 0-8 0','#7c3aed')}
+    ${kpiCard('Hợp đồng',''+d.contracts.total,d.contracts.active+' đang thực hiện','#dbeafe','M14 2H6a2 2 0 0 0-2 2v16h16V8zM14 2v6h6','#1d4ed8')}
+    ${kpiCard('Hồ sơ xử lý',''+d.cases.active,d.cases.urgent+' ưu tiên cao','#fef3c7','M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z','#b45309')}
+    ${kpiCard('Đã hoàn thành',''+d.cases.total,'tổng hồ sơ','#dcfce7','M22 11.08V12a10 10 0 1 1-5.93-9.14M22 4 12 14.01l-3-3','#15803d')}
+    ${kpiCard('Doanh thu',fmtShort(d.contracts.total_value),cr+'% đã thu','#e0f2fe','M12 1v22M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6','#0369a1')}
+    <div class="db-kpi-card">
+      <div class="db-kpi-icon" style="background:#d1fae5">
+        <svg width="22" height="22" fill="none" stroke="#059669" stroke-width="2" viewBox="0 0 24 24"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/></svg>
+      </div>
+      <div>
+        <div class="db-kpi-label">Thành phần</div>
+        <div class="db-kpi-value" style="color:#059669" id="dashIngredientTotal">—</div>
+        <div class="db-kpi-sub" id="dashIngredientSub">Đang tải...</div>
+      </div>
+    </div>
+  </div>
+  <div class="db-chart-grid db-chart-grid-3">
+    <div class="db-chart-card"><div class="db-chart-title">Khách hàng theo quốc gia</div><div style="height:200px;position:relative"><canvas id="cChart1"></canvas></div></div>
+    <div class="db-chart-card"><div class="db-chart-title">Trạng thái hợp đồng</div><div style="height:200px;position:relative"><canvas id="cChart2"></canvas></div></div>
+    <div class="db-chart-card"><div class="db-chart-title">Trạng thái hồ sơ</div><div style="height:200px;position:relative"><canvas id="cChart3"></canvas></div></div>
+  </div>
+  <div class="db-chart-grid db-chart-grid-2">
+    <div class="db-chart-card"><div class="db-chart-title">Doanh thu theo dịch vụ (VNĐ)</div><div style="height:220px;position:relative"><canvas id="cChart4"></canvas></div></div>
+    <div class="db-chart-card">
+      <div class="db-chart-title">Hồ sơ sắp đến hạn</div>
+      ${d.cases.upcoming_deadlines.length===0?'<div class="text-gray fs-13" style="padding:20px 0;text-align:center">Không có hồ sơ nào sắp đến hạn</div>':d.cases.upcoming_deadlines.slice(0,5).map(c=>`
+        <div class="db-deadline-row">
+          <div><div class="fs-12 fw-600">${c.case_name}</div><div class="text-gray" style="font-size:11px">${c.client_name||''}</div></div>
+          <div style="text-align:right">${badge(c.priority)}<div style="font-size:11px;color:#dc2626;margin-top:2px">${fmtDate(c.deadline)}</div></div>
+        </div>`).join('')}
+    </div>
+  </div>`;
+}
+
+function _dbCompact(d) {
+  const debt = d.contracts.total_value - d.contracts.total_paid;
+  const cr = d.contracts.total_value > 0 ? Math.round(d.contracts.total_paid/d.contracts.total_value*100) : 0;
+  const cards = [
+    {v:d.clients.total,l:'Khách hàng',s:d.clients.active+' hoạt động',c:'#6366f1'},
+    {v:d.clients.potential,l:'Tiềm năng',s:'khách hàng',c:'#8b5cf6'},
+    {v:d.contracts.total,l:'Hợp đồng',s:d.contracts.active+' đang thực hiện',c:'#0ea5e9'},
+    {v:fmtShort(d.contracts.total_value),l:'Tổng doanh thu',s:'giá trị HĐ',c:'#10b981'},
+    {v:fmtShort(d.contracts.total_paid),l:'Đã thu',s:cr+'%',c:'#059669'},
+    {v:fmtShort(debt),l:'Công nợ',s:'chưa thu',c:'#ef4444'},
+    {v:d.cases.total,l:'Tổng hồ sơ',s:'giấy phép',c:'#f59e0b'},
+    {v:d.cases.active,l:'Đang xử lý',s:d.cases.urgent+' ưu tiên cao',c:'#d97706'},
+    {v:d.cases.upcoming_deadlines.length,l:'Sắp đến hạn',s:'30 ngày tới',c:'#dc2626'},
+  ];
+  return `<div class="db-compact-grid">${cards.map(c=>`<div class="db-compact-card"><div class="db-compact-val" style="color:${c.c}">${c.v}</div><div class="db-compact-lbl">${c.l}</div><div class="db-compact-sub" style="color:${c.c}">${c.s}</div></div>`).join('')}
+  <div class="db-compact-card"><div class="db-compact-val" style="color:#059669" id="dashIngredientTotal">—</div><div class="db-compact-lbl">Thành phần</div><div class="db-compact-sub" id="dashIngredientSub" style="color:#059669">Đang tải</div></div>
+  </div>
+  <div class="card mt-16">
+    <div class="db-chart-title">Phân bổ khách hàng theo quốc gia</div>
+    ${d.clients.by_country.slice(0,8).map(c=>`<div class="flex items-center gap-12" style="margin-bottom:8px"><div style="width:110px;font-size:13px;font-weight:600">${c.country}</div><div style="flex:1">${progressBar(d.clients.total>0?c.count/d.clients.total*100:0)}</div><div style="font-size:13px;font-weight:600;min-width:24px;text-align:right">${c.count}</div></div>`).join('')}
+  </div>`;
+}
+
+function _dbDetailed(d) {
+  const debt = d.contracts.total_value - d.contracts.total_paid;
+  const cr = d.contracts.total_value > 0 ? Math.round(d.contracts.total_paid/d.contracts.total_value*100) : 0;
+  return `
+  <div class="stat-grid" style="margin-bottom:16px">
+    ${statCard('Tổng khách hàng',d.clients.total,d.clients.active+' đang hoạt động','var(--primary)')}
+    ${statCard('Hợp đồng',d.contracts.total,d.contracts.active+' đang thực hiện','var(--success)')}
+    ${statCard('Hồ sơ đang xử lý',d.cases.active,d.cases.urgent+' ưu tiên cao','var(--warning)')}
+    ${statCard('Doanh thu',fmt(d.contracts.total_value),'Công nợ: '+fmt(debt),'var(--info)')}
+    <div class="card stat-card"><div class="stat-icon" style="background:#f0fdf4"><svg width="24" height="24" fill="none" stroke="#059669" stroke-width="2" viewBox="0 0 24 24"><path d="M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 1-2-2v-4m0 0h18"/></svg></div><div><div class="stat-label">Thành phần</div><div class="stat-value" id="dashIngredientTotal">—</div><div class="stat-sub" id="dashIngredientSub">Đang tải...</div></div></div>
+  </div>
+  <div class="grid-2">
+    <div class="card">
+      <h3 class="fs-15 mb-16">Hồ sơ sắp đến hạn (30 ngày tới)</h3>
+      ${d.cases.upcoming_deadlines.length===0?'<div class="text-gray fs-13">Không có hồ sơ nào sắp đến hạn</div>':d.cases.upcoming_deadlines.map(c=>`<div class="flex justify-between items-center" style="padding:8px 0;border-bottom:1px solid var(--border)"><div><div class="fs-13 fw-600">${c.case_name}</div><div class="fs-12 text-gray">${c.client_name||''}</div></div><div class="text-right">${badge(c.status)}<div class="fs-12 text-danger mt-8">Hạn: ${fmtDate(c.deadline)}</div></div></div>`).join('')}
+    </div>
+    <div class="card">
+      <h3 class="fs-15 mb-16">Phân bố theo quốc gia</h3>
+      ${d.clients.by_country.slice(0,6).map(c=>`<div class="flex items-center gap-12" style="margin-bottom:10px"><div style="width:100px" class="fs-13 fw-600">${c.country}</div><div style="flex:1">${progressBar(c.count/d.clients.total*100)}</div><div class="fs-13 fw-600" style="min-width:24px;text-align:right">${c.count}</div></div>`).join('')}
+    </div>
+  </div>
+  <div class="grid-2 mt-16">
+    <div class="card">
+      <h3 class="fs-15 mb-16">Dịch vụ phổ biến</h3>
+      ${d.contracts.by_service.slice(0,5).map(s=>`<div class="flex justify-between" style="padding:6px 0;border-bottom:1px solid var(--border);font-size:13px"><span>${s.service_type}</span><span class="fw-600 text-primary">${s.count} HĐ · ${fmtShort(s.total_value)}</span></div>`).join('')}
+    </div>
+    <div class="card">
+      <h3 class="fs-15 mb-16">Tình hình thanh toán</h3>
+      <div style="margin-bottom:12px"><div class="flex justify-between fs-13" style="margin-bottom:4px"><span>Đã thu</span><span class="fw-600 text-success">${fmt(d.contracts.total_paid)}</span></div>${progressBar(cr)}</div>
+      <div style="margin-bottom:12px"><div class="flex justify-between fs-13" style="margin-bottom:4px"><span>Công nợ</span><span class="fw-600 text-danger">${fmt(debt)}</span></div>${progressBar(100-cr)}</div>
+      <div style="padding:10px;background:var(--gray-light);border-radius:8px;font-size:13px"><div class="flex justify-between"><span class="fw-600">Tổng giá trị HĐ:</span><span class="fw-700 text-primary">${fmt(d.contracts.total_value)}</span></div><div class="flex justify-between mt-8"><span>Tỷ lệ thu hồi:</span><span class="fw-600">${cr}%</span></div></div>
+    </div>
+  </div>`;
+}
+
+function statCard(label, value, sub, color) {
+  return `<div class="card stat-card"><div class="stat-icon" style="background:${color}15;color:${color}">
+    <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+  </div><div><div class="stat-label">${label}</div><div class="stat-value">${value}</div>${sub?`<div class="stat-sub">${sub}</div>`:''}</div></div>`;
+}
+
+function _initCharts(d) {
+  const opts = (legend=false) => ({ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:legend, position:'bottom', labels:{font:{size:11},boxWidth:12,padding:8} }, tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.parsed||ctx.parsed===0?ctx.parsed:ctx.raw}`}} } });
+  // Chart 1: KH theo quốc gia (doughnut)
+  const c1 = document.getElementById('cChart1'); if(c1){
+    _chartInst.c1 = new Chart(c1, { type:'doughnut', data:{ labels:d.clients.by_country.slice(0,7).map(r=>r.country), datasets:[{ data:d.clients.by_country.slice(0,7).map(r=>r.count), backgroundColor:_CHART_COLORS, borderWidth:2, borderColor:'#fff', hoverOffset:6 }] }, options:{...opts(true), cutout:'65%'} });
+  }
+  // Chart 2: HĐ theo trạng thái (pie)
+  const c2 = document.getElementById('cChart2'); if(c2){
+    _chartInst.c2 = new Chart(c2, { type:'doughnut', data:{ labels:d.contracts.by_status.map(r=>r.status), datasets:[{ data:d.contracts.by_status.map(r=>r.count), backgroundColor:_CHART_COLORS, borderWidth:2, borderColor:'#fff' }] }, options:{...opts(true), cutout:'60%'} });
+  }
+  // Chart 3: Hồ sơ theo trạng thái (doughnut)
+  const c3 = document.getElementById('cChart3'); if(c3){
+    _chartInst.c3 = new Chart(c3, { type:'doughnut', data:{ labels:d.cases.by_status.map(r=>r.status), datasets:[{ data:d.cases.by_status.map(r=>r.count), backgroundColor:_CHART_COLORS, borderWidth:2, borderColor:'#fff' }] }, options:{...opts(true), cutout:'60%'} });
+  }
+  // Chart 4: Doanh thu theo dịch vụ (horizontal bar)
+  const c4 = document.getElementById('cChart4'); if(c4){
+    const svc = d.contracts.by_service.slice(0,6);
+    _chartInst.c4 = new Chart(c4, { type:'bar', data:{ labels:svc.map(r=>r.service_type.length>30?r.service_type.slice(0,28)+'…':r.service_type), datasets:[{ label:'Giá trị (VNĐ)', data:svc.map(r=>r.total_value), backgroundColor:_CHART_COLORS, borderRadius:6, borderWidth:0 }] },
+      options:{ responsive:true, maintainAspectRatio:false, indexAxis:'y', plugins:{ legend:{display:false}, tooltip:{callbacks:{label:ctx=>' '+fmtShort(ctx.raw)+' VNĐ'}} }, scales:{ x:{ grid:{color:'#f3f4f6'}, ticks:{callback:v=>fmtShort(v)} }, y:{ grid:{display:false}, ticks:{font:{size:11}} } } }
+    });
+  }
 }
 
 // --- CLIENTS PAGE ---
@@ -863,92 +1007,6 @@ async function doSearch(q) {
   }
   if (total === 0) html = `<div class="card" style="text-align:center;padding:40px;color:var(--gray)">Không tìm thấy kết quả phù hợp với "${q}"</div>`;
   document.getElementById('searchResults').innerHTML = html;
-}
-
-// ============================================================
-// USERS & ROLES (Admin only)
-// ============================================================
-async function renderUsers() {
-  const user = authUser;
-  if (!user || user.role !== 'admin') {
-    return `<div class="card" style="text-align:center;padding:48px;color:var(--gray)">
-      <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 16px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
-      <div style="font-size:16px;font-weight:600;margin-bottom:8px">Không có quyền truy cập</div>
-      <div>Chỉ Admin mới xem được trang này.</div>
-    </div>`;
-  }
-  const users = await api('/api/auth/users');
-  const roleBadge = r => ({ admin: 'danger', manager: 'warning', staff: 'info' })[r] || 'gray';
-  const roleLabel = r => ({ admin: 'Admin', manager: 'Manager', staff: 'Staff' })[r] || r;
-  return `
-    <div class="flex justify-between items-center mb-24">
-      <h2 style="font-size:22px">Quản lý Người dùng</h2>
-      <button class="btn btn-primary" onclick="showRegisterForm()">+ Thêm người dùng</button>
-    </div>
-    <div class="info-panel">
-      <b>Phân quyền:</b>
-      <span class="badge" style="color:#dc2626;background:#fee2e2;margin:0 8px">Admin</span> Toàn quyền — quản lý users, xem mọi dữ liệu
-      <span class="badge" style="color:#d97706;background:#fef3c7;margin:0 8px">Manager</span> Quản lý khách hàng, hợp đồng, hồ sơ
-      <span class="badge" style="color:#0284c7;background:#e0f2fe;margin:0 8px">Staff</span> Xem và cập nhật hồ sơ được giao
-    </div>
-    <div class="card" style="padding:0;overflow:hidden">
-      <table>
-        <thead><tr>
-          <th>Tên đăng nhập</th><th>Họ tên</th><th>Email</th>
-          <th>Vai trò</th><th>Trạng thái</th><th>Đăng nhập lần cuối</th><th></th>
-        </tr></thead>
-        <tbody>
-          ${(Array.isArray(users) ? users : []).map(u => `
-            <tr>
-              <td><b>${u.username}</b>${u.id === authUser?.id ? ' <span class="badge" style="color:#059669;background:#d1fae5;font-size:10px">Bạn</span>' : ''}</td>
-              <td>${u.full_name || '—'}</td>
-              <td>${u.email}</td>
-              <td>${badge(roleLabel(u.role))}</td>
-              <td>${u.is_active ? '<span style="color:#059669">Hoạt động</span>' : '<span style="color:#dc2626">Vô hiệu</span>'}</td>
-              <td class="text-gray fs-12">${u.last_login ? new Date(u.last_login).toLocaleString('vi-VN') : 'Chưa đăng nhập'}</td>
-              <td>${u.id !== authUser?.id ? `<button class="btn btn-sm ${u.is_active ? 'btn-outline' : 'btn-primary'}" onclick="toggleUser('${u.id}','${u.username}',${u.is_active})">${u.is_active ? 'Vô hiệu hóa' : 'Kích hoạt'}</button>` : ''}</td>
-            </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>`;
-}
-
-function showRegisterForm() {
-  showModal('Thêm người dùng mới', `
-    <form onsubmit="registerUser(event)">
-      <div class="form-grid">
-        <div class="form-group"><label>Tên đăng nhập *</label><input name="username" required placeholder="vd: nguyen_van_a"></div>
-        <div class="form-group"><label>Họ tên</label><input name="full_name" placeholder="Nguyễn Văn A"></div>
-        <div class="form-group"><label>Email *</label><input name="email" type="email" required></div>
-        <div class="form-group"><label>Mật khẩu *</label><input name="password" type="password" required placeholder="Tối thiểu 8 ký tự"></div>
-        <div class="form-group"><label>Vai trò</label>
-          <select name="role">
-            <option value="staff">Staff — Nhân viên</option>
-            <option value="manager">Manager — Quản lý</option>
-            <option value="admin">Admin — Toàn quyền</option>
-          </select>
-        </div>
-      </div>
-      <div class="flex justify-between mt-16">
-        <button type="button" class="btn btn-ghost" onclick="closeModal()">Hủy</button>
-        <button type="submit" class="btn btn-primary">Tạo tài khoản</button>
-      </div>
-    </form>`);
-}
-
-async function registerUser(e) {
-  e.preventDefault();
-  const data = Object.fromEntries(new FormData(e.target));
-  const res = await api('/api/auth/register', { method: 'POST', body: JSON.stringify(data) });
-  if (res.error) return alert('Lỗi: ' + res.error);
-  closeModal();
-  navigate('users');
-}
-
-async function toggleUser(id, username, isActive) {
-  if (!confirm(`${isActive ? 'Vô hiệu hóa' : 'Kích hoạt'} tài khoản "${username}"?`)) return;
-  await api(`/api/auth/users/${id}/toggle`, { method: 'PUT' });
-  navigate('users');
 }
 
 // ============================================================
@@ -1557,9 +1615,26 @@ async function startAutoImport() {
 
 async function loadCosingStats() {
   try {
-    const s = await fetch('/api/cosing/stats').then(r => r.json());
+    const [s, t] = await Promise.all([
+      fetch('/api/cosing/stats').then(r => r.json()),
+      fetch('/api/ingredients/total').then(r => r.json()),
+    ]);
     const el = document.getElementById('cosingDbCount');
-    if (el) el.textContent = s.total.toLocaleString() + ' thành phần';
+    if (el) el.textContent = s.total.toLocaleString() + ' EU CosIng';
+
+    // Tab Tra cứu — tổng
+    const totalEl = document.getElementById('cdbTotalCount');
+    if (totalEl && t.country_db > 0) totalEl.textContent = `· ${t.country_db.toLocaleString()} quốc gia`;
+
+    // Dashboard stat card
+    const dashTotal = document.getElementById('dashIngredientTotal');
+    const dashSub   = document.getElementById('dashIngredientSub');
+    if (dashTotal) dashTotal.textContent = t.total.toLocaleString();
+    if (dashSub) {
+      const parts = [`EU CosIng: ${t.cosing_eu.toLocaleString()}`];
+      if (t.country_db > 0) parts.push(`Quốc gia: ${t.country_db.toLocaleString()}`);
+      dashSub.textContent = parts.join(' · ');
+    }
   } catch(e) {}
   loadKrStats();
 }
@@ -1768,54 +1843,499 @@ async function saveCase(e, id) {
 
 async function deleteCase(id) { if (confirm('Xóa hồ sơ này?')) { await api(`/api/cases/${id}`, { method: 'DELETE' }); render(); } }
 
-// currentDate is set after auth init (in second script block)
-</script>
+// ============================================================
+// SYSTEM CHAT AI
+// ============================================================
+let _scHistory = [];
 
-<!-- AI Chatbot FAB -->
-<button id="ai-fab" class="hidden" onclick="toggleAiPanel()" title="Trợ lý AI OCEAN">
-  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-    <path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2"/>
-    <path d="M8 12h.01M12 12h.01M16 12h.01"/>
-    <circle cx="12" cy="12" r="1" fill="currentColor"/>
-    <circle cx="8" cy="12" r="1" fill="currentColor"/>
-    <circle cx="16" cy="12" r="1" fill="currentColor"/>
-  </svg>
-</button>
+const SC_SUGGESTIONS = [
+  'Tổng quan hệ thống hôm nay',
+  'Hồ sơ nào sắp đến hạn trong 30 ngày?',
+  'Khách hàng nào chưa thanh toán?',
+  'Doanh thu theo loại dịch vụ',
+  'Hồ sơ ưu tiên cao đang xử lý',
+  'Khách hàng Nhật Bản trong hệ thống',
+];
 
-<!-- AI Chat Panel -->
-<div id="ai-panel" class="hidden">
-  <div class="ai-header">
+function renderChatPage() {
+  return `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
     <div>
-      <div class="title">Trợ lý AI OCEAN</div>
-      <div class="subtitle">Tư vấn FDI, mỹ phẩm, quy định nhập khẩu</div>
+      <h2 style="font-size:22px;font-weight:700">Chat AI</h2>
+      <div class="fs-13 text-gray mt-4">Hỏi bất kỳ điều gì về dữ liệu trong hệ thống</div>
     </div>
-    <button class="btn btn-ghost btn-sm" onclick="toggleAiPanel()">✕</button>
+    <button class="btn btn-outline btn-sm" onclick="scClear()" style="font-size:12px">Xóa lịch sử</button>
   </div>
-  <div class="ai-messages" id="aiMessages">
-    <div class="ai-msg bot">Xin chào! Tôi là trợ lý AI của OCEAN AI CRM. Tôi có thể giúp bạn về thủ tục đầu tư FDI, quy định mỹ phẩm/thực phẩm nhập khẩu, và quản lý hồ sơ. Bạn cần hỗ trợ gì?</div>
-  </div>
-  <div class="ai-input-row">
-    <input type="text" id="aiInput" placeholder="Nhập câu hỏi..." onkeydown="if(event.key==='Enter')sendAiMessage()">
-    <button onclick="sendAiMessage()" id="aiSendBtn">Gửi</button>
-  </div>
-</div>
+  <div class="sc-wrap">
+    <div class="sc-chat" id="scChat">
+      <div class="sc-msg assistant">
+        <div class="sc-avatar" style="background:var(--primary-light)">🤖</div>
+        <div class="sc-bubble">Xin chào! Tôi là trợ lý AI của OCEAN CRM.<br>Bạn có thể hỏi tôi về khách hàng, hợp đồng, hồ sơ giấy phép, doanh thu... bất kỳ điều gì trong hệ thống.</div>
+      </div>
+    </div>
+    <div class="sc-suggestions" id="scSuggestions">
+      ${SC_SUGGESTIONS.map(s => `<button class="btn btn-outline btn-sm" onclick="scSend(${JSON.stringify(s)})" style="font-size:12px;border-radius:20px">${s}</button>`).join('')}
+    </div>
+    <div class="sc-bar">
+      <input id="scInput" type="text" placeholder="Hỏi về khách hàng, hợp đồng, hồ sơ, doanh thu..."
+        onkeydown="if(event.key==='Enter')scSend()">
+      <button class="btn btn-primary" onclick="scSend()" id="scSendBtn" style="border-radius:50%;width:40px;height:40px;padding:0;flex-shrink:0">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  </div>`;
+}
 
-<script>
+function initChatPage() {
+  // Re-render history if any
+  if (_scHistory.length) scRenderHistory();
+  setTimeout(() => document.getElementById('scInput')?.focus(), 50);
+}
+
+function scRenderHistory() {
+  const chat = document.getElementById('scChat');
+  if (!chat) return;
+  // Keep welcome message, append history
+  const welcome = chat.querySelector('.sc-msg');
+  chat.innerHTML = '';
+  if (welcome) chat.appendChild(welcome);
+  _scHistory.forEach(m => {
+    if (m.role === 'user') {
+      chat.innerHTML += scUserBubble(m.content);
+    } else if (m.role === 'assistant') {
+      chat.innerHTML += scAiBubble(m.content);
+    }
+  });
+  scScrollDown();
+}
+
+function scUserBubble(text) {
+  return `<div class="sc-msg user">
+    <div class="sc-avatar" style="background:var(--primary);color:#fff">👤</div>
+    <div class="sc-bubble">${esc(text)}</div>
+  </div>`;
+}
+
+function scAiBubble(text, id) {
+  return `<div class="sc-msg assistant"${id ? ` id="${id}"` : ''}>
+    <div class="sc-avatar" style="background:var(--primary-light)">🤖</div>
+    <div class="sc-bubble">${esc(text)}</div>
+  </div>`;
+}
+
+function scScrollDown() {
+  setTimeout(() => { const el = document.getElementById('scChat'); if (el) el.scrollTop = el.scrollHeight; }, 30);
+}
+
+async function scSend(preset) {
+  const input = document.getElementById('scInput');
+  const msg = preset || input?.value.trim();
+  if (!msg) return;
+  if (input) { input.value = ''; }
+
+  // Hide suggestions after first send
+  const sugg = document.getElementById('scSuggestions');
+  if (sugg) sugg.style.display = 'none';
+
+  const chat = document.getElementById('scChat');
+  if (!chat) return;
+
+  // Add user bubble
+  chat.innerHTML += scUserBubble(msg);
+  scScrollDown();
+
+  // Add streaming AI bubble
+  const aId = 'sc-ai-' + Date.now();
+  chat.innerHTML += `<div class="sc-msg assistant" id="${aId}">
+    <div class="sc-avatar" style="background:var(--primary-light)">🤖</div>
+    <div class="sc-bubble nb-typing" id="${aId}-text"></div>
+  </div>`;
+  scScrollDown();
+
+  document.getElementById('scSendBtn').disabled = true;
+
+  try {
+    const resp = await fetch('/api/system-chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, history: _scHistory.slice(-10) }),
+    });
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    const textEl = document.getElementById(aId + '-text');
+    let fullText = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const lines = dec.decode(value).split('\n');
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        try {
+          const d = JSON.parse(line.slice(5));
+          if (d.type === 'tool') {
+            // Show tool call badge briefly
+            if (textEl) {
+              const badge = document.createElement('span');
+              badge.className = 'sc-tool-badge';
+              badge.textContent = '🔍 ' + d.name.replace(/_/g, ' ');
+              textEl.classList.remove('nb-typing');
+              textEl.appendChild(badge);
+              textEl.innerHTML += '<br>';
+            }
+          }
+          if (d.type === 'delta') {
+            fullText += d.content;
+            if (textEl) {
+              textEl.classList.add('nb-typing');
+              textEl.innerHTML = esc(fullText);
+            }
+            scScrollDown();
+          }
+          if (d.type === 'done') {
+            if (textEl) textEl.classList.remove('nb-typing');
+          }
+          if (d.type === 'error') {
+            if (textEl) { textEl.classList.remove('nb-typing'); textEl.textContent = 'Lỗi: ' + d.message; }
+          }
+        } catch(e) {}
+      }
+    }
+
+    // Save to history
+    _scHistory.push({ role: 'user', content: msg });
+    _scHistory.push({ role: 'assistant', content: fullText });
+
+  } catch(e) {
+    const textEl = document.getElementById(aId + '-text');
+    if (textEl) { textEl.classList.remove('nb-typing'); textEl.textContent = 'Lỗi kết nối: ' + e.message; }
+  }
+
+  const btn = document.getElementById('scSendBtn');
+  if (btn) btn.disabled = false;
+  setTimeout(() => document.getElementById('scInput')?.focus(), 50);
+  scScrollDown();
+}
+
+function scClear() {
+  _scHistory = [];
+  initChatPage();
+  navigate('chat', document.querySelector('[data-page="chat"]'));
+}
+
+// ============================================================
+// NOTEBOOK AI
+// ============================================================
+let _nbState = { notebooks: [], activeId: null, sources: [], uploading: false };
+
+function renderNotebookList() {
+  return `
+  <div class="flex justify-between items-center mb-20">
+    <div>
+      <h2 style="font-size:22px;font-weight:700">Notebook AI</h2>
+      <div class="fs-13 text-gray mt-4">Tải tài liệu lên và đặt câu hỏi với AI — giống NotebookLM</div>
+    </div>
+    <button class="btn btn-primary" onclick="nbCreateNew()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      Tạo Notebook
+    </button>
+  </div>
+  <div class="nb-layout" id="nbLayout">
+    <div class="nb-sidebar" id="nbSidebar">
+      <div class="text-gray fs-13" style="padding:8px">Đang tải...</div>
+    </div>
+    <div class="nb-main" id="nbMain" style="align-items:center;justify-content:center;color:var(--gray)">
+      <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="opacity:.3;margin-bottom:12px"><path d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2zm0 18a8 8 0 1 1 8-8 8 8 0 0 1-8 8z"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      <div class="fs-13">Chọn hoặc tạo Notebook để bắt đầu</div>
+    </div>
+  </div>`;
+}
+
+async function initNotebookPage() {
+  await nbLoadList();
+}
+
+async function nbLoadList() {
+  const res = await fetch('/api/notebooks').then(r => r.json());
+  _nbState.notebooks = res;
+  const sb = document.getElementById('nbSidebar');
+  if (!sb) return;
+  if (!res.length) {
+    sb.innerHTML = `<div class="text-gray fs-13" style="padding:8px 4px">Chưa có notebook nào.<br>Bấm <b>Tạo Notebook</b> để bắt đầu.</div>`;
+    return;
+  }
+  sb.innerHTML = res.map(nb => `
+    <div class="nb-card ${nb.id === _nbState.activeId ? 'active' : ''}" onclick="nbOpen('${nb.id}')">
+      <div class="fw-600 fs-13" style="margin-bottom:4px">${esc(nb.title)}</div>
+      ${nb.description ? `<div class="fs-12 text-gray" style="margin-bottom:6px">${esc(nb.description)}</div>` : ''}
+      <div class="fs-12 text-gray">${nb.source_count} tài liệu · ${nb.chat_count} tin nhắn</div>
+      <div style="margin-top:8px;display:flex;gap:6px">
+        <button class="btn btn-outline btn-sm" style="font-size:11px" onclick="event.stopPropagation();nbEdit('${nb.id}')">Sửa</button>
+        <button class="btn btn-sm" style="font-size:11px;background:var(--danger-light);color:var(--danger)" onclick="event.stopPropagation();nbDelete('${nb.id}')">Xóa</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+async function nbOpen(id) {
+  _nbState.activeId = id;
+  await nbLoadList();
+  const nb = _nbState.notebooks.find(n => n.id === id);
+  if (!nb) return;
+  const sources = await fetch(`/api/notebooks/${id}/sources`).then(r => r.json());
+  const chats   = await fetch(`/api/notebooks/${id}/chats`).then(r => r.json());
+  _nbState.sources = sources;
+
+  const mainEl = document.getElementById('nbMain');
+  if (!mainEl) return;
+  mainEl.innerHTML = `
+    <!-- Header -->
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div class="fw-600 fs-15">${esc(nb.title)}</div>
+        ${nb.description ? `<div class="fs-12 text-gray">${esc(nb.description)}</div>` : ''}
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-outline btn-sm" onclick="nbSummarize('${id}')" style="font-size:12px">Tóm tắt toàn bộ</button>
+        <button class="btn btn-outline btn-sm" onclick="nbClearChat('${id}')" style="font-size:12px;color:var(--danger);border-color:var(--danger)">Xóa chat</button>
+      </div>
+    </div>
+
+    <!-- Sources panel -->
+    <div class="nb-sources-panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div class="fs-12 fw-600">Tài liệu (${sources.length})</div>
+        <button class="btn btn-primary btn-sm" onclick="document.getElementById('nbFileInput').click()" style="font-size:11px">+ Upload</button>
+      </div>
+      <input type="file" id="nbFileInput" accept=".pdf,.txt,.md,.csv,.docx" multiple style="display:none" onchange="nbUploadFiles(this.files,'${id}')">
+      <div id="nbSourcesList">
+        ${sources.length ? sources.map(s => nbSourceItem(s, id)).join('') : `
+          <div class="nb-drop-zone" id="nbDropZone"
+            ondragover="event.preventDefault();this.classList.add('drag-over')"
+            ondragleave="this.classList.remove('drag-over')"
+            ondrop="nbDrop(event,'${id}')"
+            onclick="document.getElementById('nbFileInput').click()">
+            Kéo thả PDF, TXT, MD... hoặc click để chọn file
+          </div>`}
+      </div>
+      <div id="nbUploadProgress" style="display:none;font-size:12px;color:var(--primary);margin-top:6px"></div>
+    </div>
+
+    <!-- Chat area -->
+    <div class="nb-chat-area" id="nbChatArea">
+      ${chats.length ? chats.map(m => nbChatBubble(m)).join('') : `
+        <div style="margin:auto;text-align:center;color:var(--gray)">
+          <svg width="40" height="40" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="opacity:.4;display:block;margin:0 auto 8px"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <div class="fs-13">${sources.length ? 'Đặt câu hỏi về tài liệu bên trên' : 'Upload tài liệu trước, sau đó đặt câu hỏi'}</div>
+        </div>`}
+    </div>
+
+    <!-- Input -->
+    <div class="nb-input-bar">
+      <textarea id="nbInput" rows="1" placeholder="Hỏi AI về nội dung tài liệu..."
+        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();nbSendMsg('${id}')}"
+        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+      <button class="btn btn-primary" onclick="nbSendMsg('${id}')" id="nbSendBtn">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </div>
+  `;
+  nbScrollChat();
+  setTimeout(() => document.getElementById('nbInput')?.focus(), 50);
+}
+
+function nbSourceItem(s, nbId) {
+  const icon = s.file_type?.includes('pdf') ? '📄' : '📝';
+  return `<div class="nb-source-item">
+    <div style="overflow:hidden">
+      <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px" title="${esc(s.original_name)}">${icon} ${esc(s.original_name)}</div>
+      ${s.summary ? `<div class="text-gray" style="font-size:11px;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:220px">${esc(s.summary)}</div>` : ''}
+    </div>
+    <button onclick="nbDeleteSource('${s.id}','${nbId}')" style="background:none;border:none;cursor:pointer;color:var(--gray);padding:2px 4px;flex-shrink:0" title="Xóa">✕</button>
+  </div>`;
+}
+
+function nbChatBubble(m) {
+  const sources = m.sources_used ? (() => { try { return JSON.parse(m.sources_used); } catch(e) { return []; } })() : [];
+  return `<div class="nb-msg ${m.role}">
+    ${esc(m.content)}
+    ${m.role === 'assistant' && sources.length ? `<div class="nb-sources">📎 Nguồn: ${sources.map(s => esc(s)).join(', ')}</div>` : ''}
+  </div>`;
+}
+
+function nbScrollChat() {
+  setTimeout(() => { const el = document.getElementById('nbChatArea'); if (el) el.scrollTop = el.scrollHeight; }, 50);
+}
+
+async function nbSendMsg(nbId) {
+  const input = document.getElementById('nbInput');
+  const msg = input?.value.trim();
+  if (!msg) return;
+  input.value = '';
+  input.style.height = 'auto';
+
+  const chatArea = document.getElementById('nbChatArea');
+  // Clear empty state
+  chatArea.innerHTML = chatArea.innerHTML.replace(/<div style="margin:auto.*?<\/div>\s*<\/div>/s, '');
+
+  // Add user bubble
+  chatArea.innerHTML += `<div class="nb-msg user">${esc(msg)}</div>`;
+
+  // Add streaming assistant bubble
+  const aId = 'nb-stream-' + Date.now();
+  chatArea.innerHTML += `<div class="nb-msg assistant nb-typing" id="${aId}"></div>`;
+  nbScrollChat();
+
+  document.getElementById('nbSendBtn').disabled = true;
+
+  try {
+    const resp = await fetch(`/api/notebooks/${nbId}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg }),
+    });
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    const aEl = document.getElementById(aId);
+    let fullText = '', sources = [];
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const lines = dec.decode(value).split('\n');
+      for (const line of lines) {
+        if (!line.startsWith('data:')) continue;
+        try {
+          const d = JSON.parse(line.slice(5));
+          if (d.type === 'delta') { fullText += d.content; if (aEl) aEl.textContent = fullText; nbScrollChat(); }
+          if (d.type === 'done') { sources = d.sources || []; }
+          if (d.type === 'error') { if (aEl) aEl.textContent = 'Lỗi: ' + d.message; }
+        } catch(e) {}
+      }
+    }
+
+    if (aEl) {
+      aEl.classList.remove('nb-typing');
+      aEl.innerHTML = esc(fullText) + (sources.length ? `<div class="nb-sources">📎 Nguồn: ${sources.map(s => esc(s)).join(', ')}</div>` : '');
+    }
+  } catch(e) {
+    const aEl = document.getElementById(aId);
+    if (aEl) { aEl.classList.remove('nb-typing'); aEl.textContent = 'Lỗi kết nối: ' + e.message; }
+  }
+
+  document.getElementById('nbSendBtn').disabled = false;
+  nbScrollChat();
+}
+
+async function nbUploadFiles(files, nbId) {
+  if (!files?.length) return;
+  const prog = document.getElementById('nbUploadProgress');
+  prog.style.display = 'block';
+  for (const file of files) {
+    prog.textContent = `Đang upload ${file.name}...`;
+    const fd = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await fetch(`/api/notebooks/${nbId}/sources`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) { prog.textContent = `Lỗi: ${data.error}`; continue; }
+      prog.textContent = `✓ ${file.name} — ${data.chunks} đoạn đã lập chỉ mục`;
+    } catch(e) {
+      prog.textContent = `Lỗi: ${e.message}`;
+    }
+  }
+  setTimeout(() => { prog.style.display = 'none'; nbOpen(nbId); }, 1200);
+}
+
+function nbDrop(e, nbId) {
+  e.preventDefault();
+  document.getElementById('nbDropZone')?.classList.remove('drag-over');
+  nbUploadFiles(e.dataTransfer.files, nbId);
+}
+
+async function nbDeleteSource(srcId, nbId) {
+  if (!confirm('Xóa tài liệu này?')) return;
+  await fetch(`/api/notebooks/${nbId}/sources/${srcId}`, { method: 'DELETE' });
+  nbOpen(nbId);
+}
+
+async function nbClearChat(nbId) {
+  if (!confirm('Xóa toàn bộ lịch sử chat?')) return;
+  await fetch(`/api/notebooks/${nbId}/chats`, { method: 'DELETE' });
+  nbOpen(nbId);
+}
+
+async function nbSummarize(nbId) {
+  const chatArea = document.getElementById('nbChatArea');
+  const aId = 'nb-sum-' + Date.now();
+  chatArea.innerHTML += `<div class="nb-msg user">Tóm tắt toàn bộ tài liệu trong notebook này</div><div class="nb-msg assistant nb-typing" id="${aId}">Đang tạo tóm tắt...</div>`;
+  nbScrollChat();
+  try {
+    const data = await fetch(`/api/notebooks/${nbId}/summarize`, { method: 'POST' }).then(r => r.json());
+    const el = document.getElementById(aId);
+    if (el) { el.classList.remove('nb-typing'); el.textContent = data.summary || data.error; }
+  } catch(e) {
+    const el = document.getElementById(aId);
+    if (el) { el.classList.remove('nb-typing'); el.textContent = 'Lỗi: ' + e.message; }
+  }
+  nbScrollChat();
+}
+
+async function nbCreateNew() {
+  const title = prompt('Tên Notebook:', 'Notebook mới');
+  if (!title) return;
+  const desc = prompt('Mô tả (tùy chọn):', '') || '';
+  const nb = await fetch('/api/notebooks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, description: desc }),
+  }).then(r => r.json());
+  _nbState.activeId = nb.id;
+  await nbLoadList();
+  nbOpen(nb.id);
+}
+
+async function nbEdit(id) {
+  const nb = _nbState.notebooks.find(n => n.id === id);
+  if (!nb) return;
+  const title = prompt('Tên Notebook:', nb.title);
+  if (!title) return;
+  const desc = prompt('Mô tả:', nb.description || '') || '';
+  await fetch(`/api/notebooks/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ title, description: desc }),
+  });
+  nbLoadList();
+}
+
+async function nbDelete(id) {
+  if (!confirm('Xóa notebook này và toàn bộ dữ liệu?')) return;
+  await fetch(`/api/notebooks/${id}`, { method: 'DELETE' });
+  if (_nbState.activeId === id) {
+    _nbState.activeId = null;
+    document.getElementById('nbMain').innerHTML = `<div style="margin:auto;text-align:center;color:var(--gray)" class="fs-13">Chọn hoặc tạo Notebook để bắt đầu</div>`;
+  }
+  nbLoadList();
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/\n/g,'<br>');
+}
+
 // ============================================================
 // AUTH
 // ============================================================
-const AUTH_KEY = 'ocean_crm_token';
-const USER_KEY = 'ocean_crm_user';
-let authToken = null;
 let authUser = null;
 let aiHistory = [];
 
 function initAuth() {
-  const stored = localStorage.getItem(AUTH_KEY);
-  const storedUser = localStorage.getItem(USER_KEY);
-  if (stored && storedUser) {
-    authToken = stored;
-    authUser = JSON.parse(storedUser);
+  const token = localStorage.getItem('ocean_crm_token');
+  const stored = localStorage.getItem('ocean_crm_user');
+  if (token && stored) {
+    authUser = JSON.parse(stored);
     showApp();
   } else {
     document.getElementById('login-overlay').classList.remove('hidden');
@@ -1827,164 +2347,161 @@ async function doLogin(e) {
   const btn = document.getElementById('loginBtn');
   const errEl = document.getElementById('loginError');
   errEl.style.display = 'none';
-  btn.textContent = 'Đang đăng nhập...';
-  btn.disabled = true;
-
+  btn.textContent = 'Đang đăng nhập...'; btn.disabled = true;
   try {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        username: document.getElementById('loginUser').value.trim(),
-        password: document.getElementById('loginPass').value,
-      }),
-    });
+    const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: document.getElementById('loginUser').value.trim(), password: document.getElementById('loginPass').value }) });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Đăng nhập thất bại');
-    authToken = data.token;
     authUser = data.user;
-    localStorage.setItem(AUTH_KEY, authToken);
-    localStorage.setItem(USER_KEY, JSON.stringify(authUser));
+    localStorage.setItem('ocean_crm_token', data.token);
+    localStorage.setItem('ocean_crm_user', JSON.stringify(data.user));
     showApp();
-  } catch (err) {
-    errEl.textContent = err.message;
-    errEl.style.display = 'block';
-  } finally {
-    btn.textContent = 'Đăng nhập';
-    btn.disabled = false;
-  }
+  } catch (err) { errEl.textContent = err.message; errEl.style.display = 'block'; }
+  finally { btn.textContent = 'Đăng nhập'; btn.disabled = false; }
 }
 
 function doLogout() {
   if (!confirm('Đăng xuất khỏi hệ thống?')) return;
-  localStorage.removeItem(AUTH_KEY);
-  localStorage.removeItem(USER_KEY);
-  authToken = null;
+  localStorage.removeItem('ocean_crm_token'); localStorage.removeItem('ocean_crm_user');
   authUser = null;
-  document.getElementById('login-overlay').classList.remove('hidden');
-  document.getElementById('ai-fab').classList.add('hidden');
-  document.getElementById('ai-panel').classList.add('hidden');
+  location.reload();
 }
 
 function showApp() {
   document.getElementById('login-overlay').classList.add('hidden');
   document.getElementById('ai-fab').classList.remove('hidden');
-
-  // Update avatar/username
   if (authUser) {
     const initials = (authUser.full_name || authUser.username || 'U').slice(0, 2).toUpperCase();
     document.getElementById('userAvatar').textContent = initials;
-    document.getElementById('userName').textContent = (authUser.full_name || authUser.username) + ' · ' + ({ admin: 'Admin', manager: 'Manager', staff: 'Staff' }[authUser.role] || authUser.role);
+    document.getElementById('userName').textContent = (authUser.full_name || authUser.username) + ' · ' + ({admin:'Admin',manager:'Manager',staff:'Staff'}[authUser.role] || authUser.role);
   }
-
-  // Show Users nav only for admin
-  const usersNav = document.getElementById('nav-users');
-  if (usersNav && authUser?.role === 'admin') usersNav.style.display = '';
-
+  if (authUser?.role === 'admin') { const n = document.getElementById('nav-users'); if (n) n.style.display = ''; }
   render();
 }
 
 // ============================================================
-// AI CHATBOT
+// USERS (admin only)
+// ============================================================
+async function renderUsers() {
+  if (!authUser || authUser.role !== 'admin') return `<div class="card" style="text-align:center;padding:48px;color:var(--gray)">Chỉ Admin mới xem được trang này.</div>`;
+  const users = await api('/api/auth/users');
+  const roleLabel = r => ({admin:'Admin',manager:'Manager',staff:'Staff'}[r] || r);
+  return `
+    <div class="flex justify-between items-center mb-24"><h2 style="font-size:22px">Quản lý Người dùng</h2>
+      <button class="btn btn-primary" onclick="showRegisterForm()">+ Thêm người dùng</button></div>
+    <div class="info-panel"><b>Phân quyền:</b>
+      <span class="badge" style="color:#dc2626;background:#fee2e2;margin:0 8px">Admin</span> Toàn quyền
+      <span class="badge" style="color:#d97706;background:#fef3c7;margin:0 8px">Manager</span> Quản lý hợp đồng/hồ sơ
+      <span class="badge" style="color:#0284c7;background:#e0f2fe;margin:0 8px">Staff</span> Xử lý hồ sơ
+    </div>
+    <div class="card" style="padding:0;overflow:hidden"><table>
+      <thead><tr><th>Tên đăng nhập</th><th>Họ tên</th><th>Email</th><th>Vai trò</th><th>Trạng thái</th><th>Đăng nhập cuối</th><th></th></tr></thead>
+      <tbody>${(Array.isArray(users)?users:[]).map(u=>`<tr>
+        <td><b>${u.username}</b>${u.id===authUser?.id?' <span class="badge" style="color:#059669;background:#d1fae5;font-size:10px">Bạn</span>':''}</td>
+        <td>${u.full_name||'—'}</td><td>${u.email}</td>
+        <td>${badge(roleLabel(u.role))}</td>
+        <td>${u.is_active?'<span style="color:#059669">Hoạt động</span>':'<span style="color:#dc2626">Vô hiệu</span>'}</td>
+        <td class="text-gray fs-12">${u.last_login?new Date(u.last_login).toLocaleString('vi-VN'):'Chưa đăng nhập'}</td>
+        <td>${u.id!==authUser?.id?`<button class="btn btn-sm ${u.is_active?'btn-outline':'btn-primary'}" onclick="toggleUser('${u.id}','${u.username}',${u.is_active})">${u.is_active?'Vô hiệu hóa':'Kích hoạt'}</button>`:''}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+}
+
+function showRegisterForm() {
+  showModal('Thêm người dùng mới', `<form onsubmit="registerUser(event)">
+    <div class="form-grid">
+      <div class="form-group"><label>Tên đăng nhập *</label><input name="username" required placeholder="vd: nguyen_van_a"></div>
+      <div class="form-group"><label>Họ tên</label><input name="full_name" placeholder="Nguyễn Văn A"></div>
+      <div class="form-group"><label>Email *</label><input name="email" type="email" required></div>
+      <div class="form-group"><label>Mật khẩu *</label><input name="password" type="password" required placeholder="Tối thiểu 8 ký tự"></div>
+      <div class="form-group"><label>Vai trò</label><select name="role">
+        <option value="staff">Staff — Nhân viên</option>
+        <option value="manager">Manager — Quản lý</option>
+        <option value="admin">Admin — Toàn quyền</option>
+      </select></div>
+    </div>
+    <div class="flex justify-between mt-16"><button type="button" class="btn btn-ghost" onclick="closeModal()">Hủy</button><button type="submit" class="btn btn-primary">Tạo tài khoản</button></div>
+  </form>`);
+}
+
+async function registerUser(e) {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(e.target));
+  const res = await api('/api/auth/register', { method: 'POST', body: JSON.stringify(data) });
+  if (res.error) return alert('Lỗi: ' + res.error);
+  closeModal(); navigate('users');
+}
+
+async function toggleUser(id, username, isActive) {
+  if (!confirm(`${isActive?'Vô hiệu hóa':'Kích hoạt'} tài khoản "${username}"?`)) return;
+  await api(`/api/auth/users/${id}/toggle`, { method: 'PUT' });
+  navigate('users');
+}
+
+// ============================================================
+// AI CHATBOT FAB
 // ============================================================
 function toggleAiPanel() {
-  const panel = document.getElementById('ai-panel');
-  panel.classList.toggle('hidden');
-  if (!panel.classList.contains('hidden')) {
-    document.getElementById('aiInput').focus();
-  }
+  const p = document.getElementById('ai-panel');
+  p.classList.toggle('hidden');
+  if (!p.classList.contains('hidden')) document.getElementById('aiInput').focus();
 }
 
 async function sendAiMessage() {
   const input = document.getElementById('aiInput');
-  const msg = input.value.trim();
-  if (!msg) return;
-
-  input.value = '';
-  const sendBtn = document.getElementById('aiSendBtn');
-  sendBtn.disabled = true;
-
-  appendAiMessage(msg, 'user');
-  const typingEl = appendAiMessage('Đang soạn...', 'bot typing');
-
+  const msg = input.value.trim(); if (!msg) return;
+  input.value = ''; document.getElementById('aiSendBtn').disabled = true;
+  appendAiMsg(msg, 'user');
+  const typingEl = appendAiMsg('Đang soạn...', 'bot typing');
   try {
-    const res = await fetch('/api/ai/chat/stream', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
-      },
-      body: JSON.stringify({ message: msg, history: aiHistory.slice(-10) }),
-    });
-
-    if (!res.ok) {
-      const errData = await res.json();
-      typingEl.textContent = errData.error || 'Lỗi khi kết nối AI';
-      typingEl.classList.remove('typing');
-      return;
-    }
-
-    typingEl.textContent = '';
-    typingEl.classList.remove('typing');
-
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let fullReply = '';
-
+    const res = await fetch('/api/ai/chat/stream', { method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('ocean_crm_token')||''}` },
+      body: JSON.stringify({ message: msg, history: aiHistory.slice(-10) }) });
+    if (!res.ok) { const e = await res.json(); typingEl.textContent = e.error || 'Lỗi AI'; typingEl.classList.remove('typing'); return; }
+    typingEl.textContent = ''; typingEl.classList.remove('typing');
+    const reader = res.body.getReader(); const dec = new TextDecoder(); let full = '';
     while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const text = decoder.decode(value);
-      const lines = text.split('\n');
-      for (const line of lines) {
+      const { done, value } = await reader.read(); if (done) break;
+      for (const line of dec.decode(value).split('\n')) {
         if (!line.startsWith('data: ')) continue;
-        try {
-          const parsed = JSON.parse(line.slice(6));
-          if (parsed.text) {
-            fullReply += parsed.text;
-            typingEl.textContent = fullReply;
-            scrollAiToBottom();
-          }
-          if (parsed.error) {
-            typingEl.textContent = 'Lỗi: ' + parsed.error;
-          }
-        } catch (_) {}
+        try { const p = JSON.parse(line.slice(6)); if (p.text) { full += p.text; typingEl.textContent = full; document.getElementById('aiMessages').scrollTop = 9999; } } catch(_) {}
       }
     }
-
-    aiHistory.push({ role: 'user', content: msg });
-    aiHistory.push({ role: 'assistant', content: fullReply });
+    aiHistory.push({ role: 'user', content: msg }); aiHistory.push({ role: 'assistant', content: full });
     if (aiHistory.length > 20) aiHistory = aiHistory.slice(-20);
-
-  } catch (err) {
-    typingEl.textContent = 'Lỗi kết nối: ' + err.message;
-    typingEl.classList.remove('typing');
-  } finally {
-    sendBtn.disabled = false;
-    input.focus();
-  }
+  } catch(err) { typingEl.textContent = 'Lỗi: ' + err.message; typingEl.classList.remove('typing'); }
+  finally { document.getElementById('aiSendBtn').disabled = false; document.getElementById('aiInput').focus(); }
 }
 
-function appendAiMessage(text, type) {
-  const el = document.createElement('div');
-  el.className = 'ai-msg ' + type;
-  el.textContent = text;
-  const container = document.getElementById('aiMessages');
-  container.appendChild(el);
-  scrollAiToBottom();
-  return el;
-}
-
-function scrollAiToBottom() {
-  const c = document.getElementById('aiMessages');
-  c.scrollTop = c.scrollHeight;
+function appendAiMsg(text, type) {
+  const el = document.createElement('div'); el.className = 'ai-msg ' + type; el.textContent = text;
+  const c = document.getElementById('aiMessages'); c.appendChild(el); c.scrollTop = 9999; return el;
 }
 
 // ============================================================
-// INIT — called here so all functions above are already defined
+// INIT
 // ============================================================
 document.getElementById('currentDate').textContent = new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 initAuth();
 </script>
+
+<!-- AI Chatbot FAB -->
+<button id="ai-fab" class="hidden" onclick="toggleAiPanel()" title="Trợ lý AI OCEAN">
+  <svg width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+</button>
+<div id="ai-panel" class="hidden">
+  <div class="ai-header">
+    <div><div style="font-weight:700;font-size:13px;color:#1a56db">Trợ lý AI OCEAN</div><div style="font-size:11px;color:var(--gray)">Tư vấn FDI, mỹ phẩm, quy định</div></div>
+    <button class="btn btn-ghost btn-sm" onclick="toggleAiPanel()">✕</button>
+  </div>
+  <div class="ai-messages" id="aiMessages">
+    <div class="ai-msg bot">Xin chào! Tôi có thể tư vấn về FDI, mỹ phẩm, thực phẩm nhập khẩu và quản lý hồ sơ. Bạn cần hỗ trợ gì?</div>
+  </div>
+  <div class="ai-input-row">
+    <input type="text" id="aiInput" placeholder="Nhập câu hỏi..." onkeydown="if(event.key==='Enter')sendAiMessage()">
+    <button onclick="sendAiMessage()" id="aiSendBtn">Gửi</button>
+  </div>
+</div>
 </body>
 </html>

@@ -360,6 +360,21 @@ app.get('/api/cosing/stats', (req, res) => {
   });
 });
 
+// GET /api/ingredients/total — tổng số thành phần toàn hệ thống
+app.get('/api/ingredients/total', (req, res) => {
+  const cosing     = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
+  const countryReg = db.prepare('SELECT COUNT(DISTINCT LOWER(TRIM(inci_name))) as c FROM country_regs').get().c;
+  const countryDb  = db.prepare('SELECT COUNT(*) as c FROM country_ingredients').get().c;
+  const byCountry  = db.prepare('SELECT country, COUNT(*) as count FROM country_ingredients GROUP BY country ORDER BY count DESC').all();
+  res.json({
+    cosing_eu: cosing,
+    country_regs: countryReg,
+    country_db: countryDb,
+    total: cosing + countryDb,
+    by_country: byCountry,
+  });
+});
+
 // GET /api/country-regs?inci=POLYSILICONE-15
 app.get('/api/country-regs', (req, res) => {
   const { inci } = req.query;
@@ -809,6 +824,539 @@ app.delete('/api/cosing/clear', (req, res) => {
   }
   const total = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
   res.json({ total_in_db: total });
+});
+
+// ============================================================
+// NOTEBOOK AI — NotebookLM-style RAG with OpenAI
+// ============================================================
+const multer  = require('multer');
+const OpenAI  = require('openai');
+const pdfParse = require('pdf-parse');
+const os = require('os');
+
+const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+
+// Split text into overlapping chunks (~600 chars, 80 char overlap)
+function chunkText(text, size = 600, overlap = 80) {
+  const chunks = [];
+  let start = 0;
+  while (start < text.length) {
+    chunks.push(text.slice(start, start + size));
+    start += size - overlap;
+  }
+  return chunks;
+}
+
+// Extract text from uploaded file buffer
+async function extractText(buffer, mimetype, originalname) {
+  const ext = originalname.split('.').pop().toLowerCase();
+  if (mimetype === 'application/pdf' || ext === 'pdf') {
+    const data = await pdfParse(buffer);
+    return data.text;
+  }
+  // txt, md, csv, etc.
+  return buffer.toString('utf-8');
+}
+
+// Index source chunks into FTS5
+function indexSourceChunks(sourceId, notebookId, text) {
+  db.prepare('DELETE FROM notebook_chunks_fts WHERE source_id = ?').run(sourceId);
+  const chunks = chunkText(text);
+  const ins = db.prepare('INSERT INTO notebook_chunks_fts (chunk_text, source_id, notebook_id, chunk_index) VALUES (?, ?, ?, ?)');
+  const tx = db.transaction(() => chunks.forEach((c, i) => ins.run(c, sourceId, notebookId, i)));
+  tx();
+  return chunks.length;
+}
+
+// Retrieve top-K relevant chunks for a query
+function retrieveChunks(notebookId, query, k = 8) {
+  const rows = db.prepare(`
+    SELECT f.chunk_text, f.source_id, f.chunk_index,
+           s.original_name as source_name
+    FROM notebook_chunks_fts f
+    JOIN notebook_sources s ON s.id = f.source_id
+    WHERE f.notebook_id = ? AND notebook_chunks_fts MATCH ?
+    ORDER BY rank
+    LIMIT ?
+  `).all(notebookId, query.replace(/[^a-zA-ZÀ-ỹ0-9 ]/g, ' ').trim() || '""', k);
+  return rows;
+}
+
+// ── CRUD Notebooks ──────────────────────────────────────────
+app.get('/api/notebooks', (req, res) => {
+  const rows = db.prepare(`
+    SELECT n.*, COUNT(s.id) as source_count,
+           (SELECT COUNT(*) FROM notebook_chats WHERE notebook_id = n.id) as chat_count
+    FROM notebooks n
+    LEFT JOIN notebook_sources s ON s.notebook_id = n.id
+    GROUP BY n.id ORDER BY n.updated_at DESC
+  `).all();
+  res.json(rows);
+});
+
+app.post('/api/notebooks', (req, res) => {
+  const id = genId();
+  const { title, description } = req.body;
+  if (!title) return res.status(400).json({ error: 'title required' });
+  db.prepare('INSERT INTO notebooks (id, title, description) VALUES (?, ?, ?)').run(id, title, description || '');
+  res.status(201).json(db.prepare('SELECT * FROM notebooks WHERE id = ?').get(id));
+});
+
+app.put('/api/notebooks/:id', (req, res) => {
+  const { title, description } = req.body;
+  db.prepare('UPDATE notebooks SET title=?, description=?, updated_at=? WHERE id=?').run(title, description || '', now(), req.params.id);
+  res.json(db.prepare('SELECT * FROM notebooks WHERE id = ?').get(req.params.id));
+});
+
+app.delete('/api/notebooks/:id', (req, res) => {
+  db.prepare('DELETE FROM notebooks WHERE id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// ── Sources ──────────────────────────────────────────────────
+app.get('/api/notebooks/:id/sources', (req, res) => {
+  const rows = db.prepare('SELECT id, notebook_id, original_name, file_type, file_size, summary, created_at FROM notebook_sources WHERE notebook_id = ? ORDER BY created_at ASC').all(req.params.id);
+  res.json(rows);
+});
+
+app.post('/api/notebooks/:id/sources', upload.single('file'), async (req, res) => {
+  const nb = db.prepare('SELECT id FROM notebooks WHERE id = ?').get(req.params.id);
+  if (!nb) return res.status(404).json({ error: 'Notebook not found' });
+  if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
+
+  try {
+    const text = await extractText(req.file.buffer, req.file.mimetype, req.file.originalname);
+    if (!text || text.trim().length < 10) return res.status(400).json({ error: 'Không thể đọc nội dung file' });
+
+    const srcId = genId();
+    db.prepare('INSERT INTO notebook_sources (id, notebook_id, filename, original_name, file_type, file_size, content_text) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .run(srcId, req.params.id, req.file.originalname, req.file.originalname, req.file.mimetype, req.file.size, text);
+
+    const chunkCount = indexSourceChunks(srcId, req.params.id, text);
+    db.prepare('UPDATE notebooks SET updated_at=? WHERE id=?').run(now(), req.params.id);
+
+    // Auto-summarize with OpenAI (async, don't block response)
+    res.status(201).json({
+      id: srcId, notebook_id: req.params.id,
+      original_name: req.file.originalname,
+      file_type: req.file.mimetype,
+      file_size: req.file.size,
+      chunks: chunkCount,
+    });
+
+    if (process.env.OPENAI_API_KEY) {
+      const excerpt = text.slice(0, 3000);
+      openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'Tóm tắt ngắn gọn nội dung tài liệu bằng tiếng Việt, tối đa 3 câu.' },
+          { role: 'user', content: excerpt },
+        ],
+        max_tokens: 200,
+      }).then(r => {
+        const summary = r.choices[0]?.message?.content || '';
+        db.prepare('UPDATE notebook_sources SET summary=? WHERE id=?').run(summary, srcId);
+      }).catch(() => {});
+    }
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+app.delete('/api/notebooks/:id/sources/:sid', (req, res) => {
+  db.prepare('DELETE FROM notebook_chunks_fts WHERE source_id = ?').run(req.params.sid);
+  db.prepare('DELETE FROM notebook_sources WHERE id = ? AND notebook_id = ?').run(req.params.sid, req.params.id);
+  res.json({ success: true });
+});
+
+// ── Chat history ─────────────────────────────────────────────
+app.get('/api/notebooks/:id/chats', (req, res) => {
+  const rows = db.prepare('SELECT * FROM notebook_chats WHERE notebook_id = ? ORDER BY created_at ASC').all(req.params.id);
+  res.json(rows);
+});
+
+app.delete('/api/notebooks/:id/chats', (req, res) => {
+  db.prepare('DELETE FROM notebook_chats WHERE notebook_id = ?').run(req.params.id);
+  res.json({ success: true });
+});
+
+// ── Chat (RAG) — SSE streaming ────────────────────────────────
+app.post('/api/notebooks/:id/chat', async (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: 'message required' });
+  if (!process.env.OPENAI_API_KEY) return res.status(503).json({ error: 'OPENAI_API_KEY chưa được cấu hình' });
+
+  const nb = db.prepare('SELECT * FROM notebooks WHERE id = ?').get(req.params.id);
+  if (!nb) return res.status(404).json({ error: 'Notebook not found' });
+
+  const sourceCount = db.prepare('SELECT COUNT(*) as c FROM notebook_sources WHERE notebook_id = ?').get(req.params.id).c;
+
+  // Save user message
+  db.prepare('INSERT INTO notebook_chats (id, notebook_id, role, content) VALUES (?, ?, ?, ?)')
+    .run(genId(), req.params.id, 'user', message);
+
+  // Retrieve relevant chunks via FTS
+  const chunks = sourceCount > 0 ? retrieveChunks(req.params.id, message) : [];
+
+  // If FTS returns nothing, fall back to first chunks of all sources
+  let contextChunks = chunks;
+  if (contextChunks.length === 0 && sourceCount > 0) {
+    contextChunks = db.prepare(`
+      SELECT f.chunk_text, f.source_id, f.chunk_index, s.original_name as source_name
+      FROM notebook_chunks_fts f
+      JOIN notebook_sources s ON s.id = f.source_id
+      WHERE f.notebook_id = ?
+      LIMIT 8
+    `).all(req.params.id);
+  }
+
+  const contextText = contextChunks.length > 0
+    ? contextChunks.map((c, i) => `[Nguồn: ${c.source_name}]\n${c.chunk_text}`).join('\n\n---\n\n')
+    : '';
+
+  const sourcesUsed = [...new Set(contextChunks.map(c => c.source_name))];
+
+  const systemPrompt = contextText
+    ? `Bạn là trợ lý AI phân tích tài liệu. Trả lời bằng tiếng Việt dựa trên các đoạn tài liệu được cung cấp. Nếu câu hỏi không liên quan đến tài liệu, hãy nói rõ.\n\nTài liệu tham khảo:\n${contextText}`
+    : `Bạn là trợ lý AI. Notebook này chưa có tài liệu nào. Hãy nhắc người dùng upload tài liệu trước.`;
+
+  // Previous chat (last 6 turns)
+  const history = db.prepare('SELECT role, content FROM notebook_chats WHERE notebook_id = ? ORDER BY created_at DESC LIMIT 12').all(req.params.id).reverse();
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...history.slice(0, -1).map(h => ({ role: h.role, content: h.content })),
+    { role: 'user', content: message },
+  ];
+
+  // Stream response via SSE
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
+
+  try {
+    const stream = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages,
+      stream: true,
+      max_tokens: 1500,
+    });
+
+    let fullContent = '';
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content || '';
+      if (delta) {
+        fullContent += delta;
+        send({ type: 'delta', content: delta });
+      }
+    }
+
+    // Save assistant response
+    db.prepare('INSERT INTO notebook_chats (id, notebook_id, role, content, sources_used) VALUES (?, ?, ?, ?, ?)')
+      .run(genId(), req.params.id, 'assistant', fullContent, JSON.stringify(sourcesUsed));
+    db.prepare('UPDATE notebooks SET updated_at=? WHERE id=?').run(now(), req.params.id);
+
+    send({ type: 'done', sources: sourcesUsed });
+    res.end();
+  } catch (e) {
+    send({ type: 'error', message: e.message });
+    res.end();
+  }
+});
+
+// ── Summary endpoint ─────────────────────────────────────────
+app.post('/api/notebooks/:id/summarize', async (req, res) => {
+  if (!process.env.OPENAI_API_KEY) return res.status(503).json({ error: 'OPENAI_API_KEY chưa được cấu hình' });
+  const sources = db.prepare('SELECT original_name, content_text FROM notebook_sources WHERE notebook_id = ?').all(req.params.id);
+  if (!sources.length) return res.status(400).json({ error: 'Chưa có tài liệu nào' });
+
+  const combined = sources.map(s => `## ${s.original_name}\n${s.content_text?.slice(0, 2000)}`).join('\n\n');
+  try {
+    const r = await openai.chat.completions.create({
+      model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'Tóm tắt toàn bộ tài liệu bằng tiếng Việt. Liệt kê các điểm chính dưới dạng bullet points.' },
+        { role: 'user', content: combined },
+      ],
+      max_tokens: 800,
+    });
+    res.json({ summary: r.choices[0]?.message?.content || '' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ============================================================
+// SYSTEM CHAT — AI trả lời câu hỏi về dữ liệu CRM
+// POST /api/system-chat  { message, history: [{role,content}] }
+// ============================================================
+
+// Tool definitions for OpenAI function calling
+const CRM_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'get_dashboard_stats',
+      description: 'Lấy thống kê tổng quan hệ thống: số khách hàng, hợp đồng, hồ sơ, doanh thu',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_clients',
+      description: 'Tìm kiếm khách hàng theo tên, quốc gia, ngành nghề, trạng thái',
+      parameters: {
+        type: 'object',
+        properties: {
+          search:   { type: 'string', description: 'Từ khóa tìm tên, người đại diện, email' },
+          country:  { type: 'string', description: 'Quốc gia' },
+          industry: { type: 'string', description: 'Ngành nghề' },
+          status:   { type: 'string', description: 'Trạng thái: Tiềm năng, Đang hoạt động, Không hoạt động' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_contracts',
+      description: 'Tìm kiếm hợp đồng theo số hợp đồng, loại dịch vụ, trạng thái, trạng thái thanh toán',
+      parameters: {
+        type: 'object',
+        properties: {
+          search:         { type: 'string', description: 'Từ khóa tìm số HĐ, tên khách hàng' },
+          status:         { type: 'string', description: 'Trạng thái HĐ: Dự thảo, Đang thực hiện, Hoàn thành, Hủy' },
+          service_type:   { type: 'string', description: 'Loại dịch vụ' },
+          payment_status: { type: 'string', description: 'Thanh toán: Chưa thanh toán, Thanh toán một phần, Đã thanh toán' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_cases',
+      description: 'Tìm kiếm hồ sơ/giấy phép theo tên, trạng thái, mức độ ưu tiên, người phụ trách',
+      parameters: {
+        type: 'object',
+        properties: {
+          search:   { type: 'string', description: 'Từ khóa tìm tên hồ sơ, khách hàng, người phụ trách' },
+          status:   { type: 'string', description: 'Trạng thái: Tiếp nhận, Đang xử lý, Chờ bổ sung, Đã cấp phép, Từ chối' },
+          priority: { type: 'string', description: 'Ưu tiên: Cao, Trung bình, Thấp' },
+          assignee: { type: 'string', description: 'Tên người phụ trách' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_upcoming_deadlines',
+      description: 'Lấy danh sách hồ sơ sắp đến hạn trong N ngày tới',
+      parameters: {
+        type: 'object',
+        properties: {
+          days: { type: 'integer', description: 'Số ngày tới (mặc định 30)', default: 30 },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_client_detail',
+      description: 'Lấy thông tin chi tiết một khách hàng cùng danh sách hợp đồng',
+      parameters: {
+        type: 'object',
+        properties: {
+          client_id: { type: 'string', description: 'ID khách hàng' },
+        },
+        required: ['client_id'],
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_revenue_report',
+      description: 'Báo cáo doanh thu: tổng giá trị HĐ, đã thu, còn nợ, theo dịch vụ / quốc gia',
+      parameters: { type: 'object', properties: {} },
+    },
+  },
+];
+
+// Execute a CRM tool call
+function executeCrmTool(name, args) {
+  switch (name) {
+    case 'get_dashboard_stats': {
+      return {
+        clients: {
+          total:     db.prepare('SELECT COUNT(*) as c FROM clients').get().c,
+          active:    db.prepare("SELECT COUNT(*) as c FROM clients WHERE status='Đang hoạt động'").get().c,
+          potential: db.prepare("SELECT COUNT(*) as c FROM clients WHERE status='Tiềm năng'").get().c,
+          by_country: db.prepare('SELECT country, COUNT(*) as count FROM clients GROUP BY country ORDER BY count DESC LIMIT 8').all(),
+        },
+        contracts: {
+          total:       db.prepare('SELECT COUNT(*) as c FROM contracts').get().c,
+          active:      db.prepare("SELECT COUNT(*) as c FROM contracts WHERE status='Đang thực hiện'").get().c,
+          total_value: db.prepare('SELECT COALESCE(SUM(value),0) as v FROM contracts').get().v,
+          total_paid:  db.prepare('SELECT COALESCE(SUM(paid_amount),0) as v FROM contracts').get().v,
+          unpaid:      db.prepare("SELECT COUNT(*) as c FROM contracts WHERE payment_status='Chưa thanh toán'").get().c,
+        },
+        cases: {
+          total:  db.prepare('SELECT COUNT(*) as c FROM cases').get().c,
+          active: db.prepare("SELECT COUNT(*) as c FROM cases WHERE status NOT IN ('Đã cấp phép','Từ chối')").get().c,
+          urgent: db.prepare("SELECT COUNT(*) as c FROM cases WHERE priority='Cao' AND status NOT IN ('Đã cấp phép','Từ chối')").get().c,
+        },
+      };
+    }
+
+    case 'search_clients': {
+      let sql = 'SELECT id, name, country, industry, representative, email, phone, investment_capital, status FROM clients WHERE 1=1';
+      const p = [];
+      if (args.country)  { sql += ' AND country = ?';  p.push(args.country); }
+      if (args.industry) { sql += ' AND industry = ?'; p.push(args.industry); }
+      if (args.status)   { sql += ' AND status = ?';   p.push(args.status); }
+      if (args.search)   { sql += ' AND (name LIKE ? OR representative LIKE ? OR email LIKE ?)'; p.push(`%${args.search}%`, `%${args.search}%`, `%${args.search}%`); }
+      sql += ' ORDER BY created_at DESC LIMIT 20';
+      return db.prepare(sql).all(...p);
+    }
+
+    case 'search_contracts': {
+      let sql = `SELECT c.id, c.contract_no, c.service_type, c.value, c.paid_amount, c.status, c.payment_status, c.start_date, c.end_date, cl.name as client_name
+                 FROM contracts c LEFT JOIN clients cl ON c.client_id = cl.id WHERE 1=1`;
+      const p = [];
+      if (args.status)         { sql += ' AND c.status = ?';         p.push(args.status); }
+      if (args.service_type)   { sql += ' AND c.service_type = ?';   p.push(args.service_type); }
+      if (args.payment_status) { sql += ' AND c.payment_status = ?'; p.push(args.payment_status); }
+      if (args.search)         { sql += ' AND (c.contract_no LIKE ? OR cl.name LIKE ?)'; p.push(`%${args.search}%`, `%${args.search}%`); }
+      sql += ' ORDER BY c.created_at DESC LIMIT 20';
+      return db.prepare(sql).all(...p);
+    }
+
+    case 'search_cases': {
+      let sql = `SELECT cs.id, cs.case_name, cs.service_type, cs.status, cs.priority, cs.assignee,
+                        cs.start_date, cs.deadline, cs.progress, cl.name as client_name, ct.contract_no
+                 FROM cases cs
+                 LEFT JOIN contracts ct ON cs.contract_id = ct.id
+                 LEFT JOIN clients cl ON ct.client_id = cl.id WHERE 1=1`;
+      const p = [];
+      if (args.status)   { sql += ' AND cs.status = ?';   p.push(args.status); }
+      if (args.priority) { sql += ' AND cs.priority = ?'; p.push(args.priority); }
+      if (args.assignee) { sql += ' AND cs.assignee LIKE ?'; p.push(`%${args.assignee}%`); }
+      if (args.search)   { sql += ' AND (cs.case_name LIKE ? OR cl.name LIKE ? OR cs.assignee LIKE ?)'; p.push(`%${args.search}%`, `%${args.search}%`, `%${args.search}%`); }
+      sql += ' ORDER BY cs.deadline ASC LIMIT 20';
+      return db.prepare(sql).all(...p);
+    }
+
+    case 'get_upcoming_deadlines': {
+      const days = args.days || 30;
+      return db.prepare(`
+        SELECT cs.case_name, cs.status, cs.priority, cs.assignee, cs.deadline, cs.progress,
+               cl.name as client_name, ct.contract_no
+        FROM cases cs
+        LEFT JOIN contracts ct ON cs.contract_id = ct.id
+        LEFT JOIN clients cl ON ct.client_id = cl.id
+        WHERE cs.deadline IS NOT NULL
+          AND cs.status NOT IN ('Đã cấp phép','Từ chối')
+          AND cs.deadline >= date('now')
+          AND cs.deadline <= date('now', '+' || ? || ' days')
+        ORDER BY cs.deadline ASC
+      `).all(days);
+    }
+
+    case 'get_client_detail': {
+      const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(args.client_id);
+      if (!client) return { error: 'Không tìm thấy khách hàng' };
+      const contracts = db.prepare('SELECT id, contract_no, service_type, value, paid_amount, status, payment_status FROM contracts WHERE client_id = ? ORDER BY created_at DESC').all(args.client_id);
+      return { ...client, contracts };
+    }
+
+    case 'get_revenue_report': {
+      return {
+        total_value:   db.prepare('SELECT COALESCE(SUM(value),0) as v FROM contracts').get().v,
+        total_paid:    db.prepare('SELECT COALESCE(SUM(paid_amount),0) as v FROM contracts').get().v,
+        total_debt:    db.prepare('SELECT COALESCE(SUM(value - paid_amount),0) as v FROM contracts WHERE status != \'Hủy\'').get().v,
+        by_service:    db.prepare('SELECT service_type, COUNT(*) as count, SUM(value) as total, SUM(paid_amount) as paid FROM contracts GROUP BY service_type ORDER BY total DESC').all(),
+        by_country:    db.prepare('SELECT cl.country, SUM(ct.value) as total, SUM(ct.paid_amount) as paid FROM contracts ct LEFT JOIN clients cl ON ct.client_id = cl.id GROUP BY cl.country ORDER BY total DESC').all(),
+        by_status:     db.prepare('SELECT status, COUNT(*) as count, SUM(value) as total FROM contracts GROUP BY status').all(),
+      };
+    }
+
+    default:
+      return { error: `Unknown tool: ${name}` };
+  }
+}
+
+app.post('/api/system-chat', async (req, res) => {
+  const { message, history = [] } = req.body;
+  if (!message) return res.status(400).json({ error: 'message required' });
+  if (!openai)  return res.status(503).json({ error: 'OPENAI_API_KEY chưa được cấu hình' });
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  const send = d => res.write(`data: ${JSON.stringify(d)}\n\n`);
+
+  const systemPrompt = `Bạn là trợ lý AI của OCEAN AI CRM — hệ thống quản lý khách hàng tư vấn đầu tư FDI vào Việt Nam.
+Nhiệm vụ: trả lời nhanh các câu hỏi về khách hàng, hợp đồng, hồ sơ giấy phép, doanh thu trong hệ thống.
+Luôn trả lời bằng tiếng Việt, ngắn gọn và có số liệu cụ thể.
+Khi cần dữ liệu hãy gọi tool phù hợp. Có thể gọi nhiều tool liên tiếp nếu cần.
+Hôm nay: ${new Date().toLocaleDateString('vi-VN')}.`;
+
+  const messages = [
+    { role: 'system', content: systemPrompt },
+    ...history.slice(-10),
+    { role: 'user', content: message },
+  ];
+
+  try {
+    // Agentic loop: let AI call tools until it has enough data
+    let loopMsgs = [...messages];
+    for (let iter = 0; iter < 5; iter++) {
+      const resp = await openai.chat.completions.create({
+        model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+        messages: loopMsgs,
+        tools: CRM_TOOLS,
+        tool_choice: 'auto',
+      });
+
+      const choice = resp.choices[0];
+      loopMsgs.push(choice.message);
+
+      if (choice.finish_reason === 'tool_calls') {
+        // Execute all tool calls
+        for (const tc of choice.message.tool_calls) {
+          const args = JSON.parse(tc.function.arguments || '{}');
+          send({ type: 'tool', name: tc.function.name });
+          const result = executeCrmTool(tc.function.name, args);
+          loopMsgs.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
+        }
+        continue; // next iteration to get final answer
+      }
+
+      // Final answer — stream it
+      const finalContent = choice.message.content || '';
+      // Stream word by word for smoothness
+      const words = finalContent.split(/(?<=\s)/);
+      for (const w of words) {
+        send({ type: 'delta', content: w });
+        await new Promise(r => setTimeout(r, 8));
+      }
+      send({ type: 'done' });
+      res.end();
+      return;
+    }
+
+    send({ type: 'error', message: 'Quá nhiều bước xử lý, thử lại.' });
+    res.end();
+  } catch (e) {
+    send({ type: 'error', message: e.message });
+    res.end();
+  }
 });
 
 // Serve frontend for all non-API routes

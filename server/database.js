@@ -175,6 +175,41 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
   CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+  -- Notebook AI
+  CREATE TABLE IF NOT EXISTS notebooks (
+    id TEXT PRIMARY KEY,
+    title TEXT NOT NULL,
+    description TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+
+  CREATE TABLE IF NOT EXISTS notebook_sources (
+    id TEXT PRIMARY KEY,
+    notebook_id TEXT NOT NULL,
+    filename TEXT NOT NULL,
+    original_name TEXT NOT NULL,
+    file_type TEXT,
+    file_size INTEGER DEFAULT 0,
+    content_text TEXT,
+    summary TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE
+  );
+
+  CREATE TABLE IF NOT EXISTS notebook_chats (
+    id TEXT PRIMARY KEY,
+    notebook_id TEXT NOT NULL,
+    role TEXT NOT NULL,
+    content TEXT NOT NULL,
+    sources_used TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (notebook_id) REFERENCES notebooks(id) ON DELETE CASCADE
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_nb_sources ON notebook_sources(notebook_id);
+  CREATE INDEX IF NOT EXISTS idx_nb_chats ON notebook_chats(notebook_id);
 `);
 
 // Migration: move any existing kr_ingredients rows into country_ingredients
