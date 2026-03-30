@@ -6,7 +6,8 @@ const rateLimit = require('express-rate-limit');
 const path = require('path');
 const crypto = require('crypto');
 const { parse: csvParseSync } = require('csv-parse/sync');
-const db = require('./database');
+const db = require('./db-shim');
+const initDatabase = require('./database');
 const logger = require('./logger');
 const { errorHandler, notFound } = require('./middleware/errorHandler');
 const { authenticate } = require('./middleware/auth');
@@ -15,6 +16,17 @@ const aiRouter = require('./routes/ai');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Patch app methods to auto-catch async handler errors
+['get','post','put','delete','patch'].forEach(method => {
+  const orig = app[method].bind(app);
+  app[method] = (path, ...handlers) => orig(path, ...handlers.map(h =>
+    h.length <= 3
+      ? async (req, res, next) => { try { await h(req, res, next); } catch(e) { next(e); } }
+      : h
+  ));
+});
+
 
 // ── Security middleware ──────────────────────────────────────
 app.use(helmet({
@@ -71,8 +83,8 @@ app.use((req, res, next) => {
 });
 
 // ── Health check ─────────────────────────────────────────────
-app.get('/api/health', (req, res) => {
-  const clientCount = db.prepare('SELECT COUNT(*) as c FROM clients').get().c;
+app.get('/api/health', async (req, res) => {
+  const clientCount = await db.prepare('SELECT COUNT(*) as c FROM clients').get().c;
   res.json({ status: 'ok', version: '2.0.0', db_clients: clientCount, timestamp: new Date().toISOString() });
 });
 
@@ -86,7 +98,7 @@ const now = () => new Date().toISOString();
 // ============================================================
 // API: CLIENTS
 // ============================================================
-app.get('/api/clients', (req, res) => {
+app.get('/api/clients', async (req, res) => {
   const { country, industry, status, search } = req.query;
   let sql = 'SELECT * FROM clients WHERE 1=1';
   const params = [];
@@ -95,39 +107,39 @@ app.get('/api/clients', (req, res) => {
   if (status) { sql += ' AND status = ?'; params.push(status); }
   if (search) { sql += ' AND (name LIKE ? OR representative LIKE ? OR email LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
   sql += ' ORDER BY created_at DESC';
-  res.json(db.prepare(sql).all(...params));
+  res.json(await db.prepare(sql).all(...params));
 });
 
-app.get('/api/clients/:id', (req, res) => {
-  const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(req.params.id);
+app.get('/api/clients/:id', async (req, res) => {
+  const client = await db.prepare('SELECT * FROM clients WHERE id = ?').get(req.params.id);
   if (!client) return res.status(404).json({ error: 'Not found' });
-  const contracts = db.prepare('SELECT * FROM contracts WHERE client_id = ? ORDER BY created_at DESC').all(req.params.id);
+  const contracts = await db.prepare('SELECT * FROM contracts WHERE client_id = ? ORDER BY created_at DESC').all(req.params.id);
   res.json({ ...client, contracts });
 });
 
-app.post('/api/clients', (req, res) => {
+app.post('/api/clients', async (req, res) => {
   const id = genId();
   const { name, country, industry, representative, email, phone, investment_capital, address, notes, status } = req.body;
-  db.prepare('INSERT INTO clients (id, name, country, industry, representative, email, phone, investment_capital, address, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, name, country, industry, representative, email, phone, investment_capital || 0, address, notes, status || 'Tiềm năng');
-  db.prepare('INSERT INTO activities (id, entity_type, entity_id, action, description) VALUES (?, ?, ?, ?, ?)').run(genId(), 'client', id, 'create', `Tạo khách hàng: ${name}`);
-  res.status(201).json(db.prepare('SELECT * FROM clients WHERE id = ?').get(id));
+  await db.prepare('INSERT INTO clients (id, name, country, industry, representative, email, phone, investment_capital, address, notes, status) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, name, country, industry, representative, email, phone, investment_capital || 0, address, notes, status || 'Tiềm năng');
+  await db.prepare('INSERT INTO activities (id, entity_type, entity_id, action, description) VALUES (?, ?, ?, ?, ?)').run(genId(), 'client', id, 'create', `Tạo khách hàng: ${name}`);
+  res.status(201).json(await db.prepare('SELECT * FROM clients WHERE id = ?').get(id));
 });
 
-app.put('/api/clients/:id', (req, res) => {
+app.put('/api/clients/:id', async (req, res) => {
   const { name, country, industry, representative, email, phone, investment_capital, address, notes, status } = req.body;
-  db.prepare('UPDATE clients SET name=?, country=?, industry=?, representative=?, email=?, phone=?, investment_capital=?, address=?, notes=?, status=?, updated_at=? WHERE id=?').run(name, country, industry, representative, email, phone, investment_capital, address, notes, status, now(), req.params.id);
-  res.json(db.prepare('SELECT * FROM clients WHERE id = ?').get(req.params.id));
+  await db.prepare('UPDATE clients SET name=?, country=?, industry=?, representative=?, email=?, phone=?, investment_capital=?, address=?, notes=?, status=?, updated_at=? WHERE id=?').run(name, country, industry, representative, email, phone, investment_capital, address, notes, status, now(), req.params.id);
+  res.json(await db.prepare('SELECT * FROM clients WHERE id = ?').get(req.params.id));
 });
 
-app.delete('/api/clients/:id', (req, res) => {
-  db.prepare('DELETE FROM clients WHERE id = ?').run(req.params.id);
+app.delete('/api/clients/:id', async (req, res) => {
+  await db.prepare('DELETE FROM clients WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
 
 // ============================================================
 // API: CONTRACTS
 // ============================================================
-app.get('/api/contracts', (req, res) => {
+app.get('/api/contracts', async (req, res) => {
   const { status, service_type, client_id, search } = req.query;
   let sql = `SELECT c.*, cl.name as client_name FROM contracts c LEFT JOIN clients cl ON c.client_id = cl.id WHERE 1=1`;
   const params = [];
@@ -136,32 +148,32 @@ app.get('/api/contracts', (req, res) => {
   if (client_id) { sql += ' AND c.client_id = ?'; params.push(client_id); }
   if (search) { sql += ' AND (c.contract_no LIKE ? OR cl.name LIKE ?)'; params.push(`%${search}%`, `%${search}%`); }
   sql += ' ORDER BY c.created_at DESC';
-  res.json(db.prepare(sql).all(...params));
+  res.json(await db.prepare(sql).all(...params));
 });
 
-app.post('/api/contracts', (req, res) => {
+app.post('/api/contracts', async (req, res) => {
   const id = genId();
   const { client_id, contract_no, service_type, value, start_date, end_date, status, payment_status, paid_amount, notes } = req.body;
-  db.prepare('INSERT INTO contracts (id, client_id, contract_no, service_type, value, start_date, end_date, status, payment_status, paid_amount, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, client_id, contract_no, service_type, value || 0, start_date, end_date, status || 'Dự thảo', payment_status || 'Chưa thanh toán', paid_amount || 0, notes);
-  db.prepare('INSERT INTO activities (id, entity_type, entity_id, action, description) VALUES (?, ?, ?, ?, ?)').run(genId(), 'contract', id, 'create', `Tạo hợp đồng: ${contract_no}`);
-  res.status(201).json(db.prepare('SELECT c.*, cl.name as client_name FROM contracts c LEFT JOIN clients cl ON c.client_id = cl.id WHERE c.id = ?').get(id));
+  await db.prepare('INSERT INTO contracts (id, client_id, contract_no, service_type, value, start_date, end_date, status, payment_status, paid_amount, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, client_id, contract_no, service_type, value || 0, start_date, end_date, status || 'Dự thảo', payment_status || 'Chưa thanh toán', paid_amount || 0, notes);
+  await db.prepare('INSERT INTO activities (id, entity_type, entity_id, action, description) VALUES (?, ?, ?, ?, ?)').run(genId(), 'contract', id, 'create', `Tạo hợp đồng: ${contract_no}`);
+  res.status(201).json(await db.prepare('SELECT c.*, cl.name as client_name FROM contracts c LEFT JOIN clients cl ON c.client_id = cl.id WHERE c.id = ?').get(id));
 });
 
-app.put('/api/contracts/:id', (req, res) => {
+app.put('/api/contracts/:id', async (req, res) => {
   const { client_id, contract_no, service_type, value, start_date, end_date, status, payment_status, paid_amount, notes } = req.body;
-  db.prepare('UPDATE contracts SET client_id=?, contract_no=?, service_type=?, value=?, start_date=?, end_date=?, status=?, payment_status=?, paid_amount=?, notes=?, updated_at=? WHERE id=?').run(client_id, contract_no, service_type, value, start_date, end_date, status, payment_status, paid_amount, notes, now(), req.params.id);
-  res.json(db.prepare('SELECT c.*, cl.name as client_name FROM contracts c LEFT JOIN clients cl ON c.client_id = cl.id WHERE c.id = ?').get(req.params.id));
+  await db.prepare('UPDATE contracts SET client_id=?, contract_no=?, service_type=?, value=?, start_date=?, end_date=?, status=?, payment_status=?, paid_amount=?, notes=?, updated_at=? WHERE id=?').run(client_id, contract_no, service_type, value, start_date, end_date, status, payment_status, paid_amount, notes, now(), req.params.id);
+  res.json(await db.prepare('SELECT c.*, cl.name as client_name FROM contracts c LEFT JOIN clients cl ON c.client_id = cl.id WHERE c.id = ?').get(req.params.id));
 });
 
-app.delete('/api/contracts/:id', (req, res) => {
-  db.prepare('DELETE FROM contracts WHERE id = ?').run(req.params.id);
+app.delete('/api/contracts/:id', async (req, res) => {
+  await db.prepare('DELETE FROM contracts WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
 
 // ============================================================
 // API: CASES
 // ============================================================
-app.get('/api/cases', (req, res) => {
+app.get('/api/cases', async (req, res) => {
   const { status, priority, assignee, search } = req.query;
   let sql = `SELECT cs.*, ct.contract_no, cl.name as client_name FROM cases cs LEFT JOIN contracts ct ON cs.contract_id = ct.id LEFT JOIN clients cl ON ct.client_id = cl.id WHERE 1=1`;
   const params = [];
@@ -170,79 +182,79 @@ app.get('/api/cases', (req, res) => {
   if (assignee) { sql += ' AND cs.assignee = ?'; params.push(assignee); }
   if (search) { sql += ' AND (cs.case_name LIKE ? OR cl.name LIKE ? OR cs.assignee LIKE ?)'; params.push(`%${search}%`, `%${search}%`, `%${search}%`); }
   sql += ' ORDER BY cs.deadline ASC';
-  res.json(db.prepare(sql).all(...params));
+  res.json(await db.prepare(sql).all(...params));
 });
 
-app.post('/api/cases', (req, res) => {
+app.post('/api/cases', async (req, res) => {
   const id = genId();
   const { contract_id, case_name, service_type, status, priority, assignee, start_date, deadline, notes, progress } = req.body;
-  db.prepare('INSERT INTO cases (id, contract_id, case_name, service_type, status, priority, assignee, start_date, deadline, notes, progress) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, contract_id, case_name, service_type, status || 'Tiếp nhận', priority || 'Trung bình', assignee, start_date, deadline, notes, progress || 0);
-  res.status(201).json(db.prepare('SELECT cs.*, ct.contract_no, cl.name as client_name FROM cases cs LEFT JOIN contracts ct ON cs.contract_id = ct.id LEFT JOIN clients cl ON ct.client_id = cl.id WHERE cs.id = ?').get(id));
+  await db.prepare('INSERT INTO cases (id, contract_id, case_name, service_type, status, priority, assignee, start_date, deadline, notes, progress) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').run(id, contract_id, case_name, service_type, status || 'Tiếp nhận', priority || 'Trung bình', assignee, start_date, deadline, notes, progress || 0);
+  res.status(201).json(await db.prepare('SELECT cs.*, ct.contract_no, cl.name as client_name FROM cases cs LEFT JOIN contracts ct ON cs.contract_id = ct.id LEFT JOIN clients cl ON ct.client_id = cl.id WHERE cs.id = ?').get(id));
 });
 
-app.put('/api/cases/:id', (req, res) => {
+app.put('/api/cases/:id', async (req, res) => {
   const { contract_id, case_name, service_type, status, priority, assignee, start_date, deadline, notes, progress } = req.body;
-  db.prepare('UPDATE cases SET contract_id=?, case_name=?, service_type=?, status=?, priority=?, assignee=?, start_date=?, deadline=?, notes=?, progress=?, updated_at=? WHERE id=?').run(contract_id, case_name, service_type, status, priority, assignee, start_date, deadline, notes, progress, now(), req.params.id);
-  res.json(db.prepare('SELECT cs.*, ct.contract_no, cl.name as client_name FROM cases cs LEFT JOIN contracts ct ON cs.contract_id = ct.id LEFT JOIN clients cl ON ct.client_id = cl.id WHERE cs.id = ?').get(req.params.id));
+  await db.prepare('UPDATE cases SET contract_id=?, case_name=?, service_type=?, status=?, priority=?, assignee=?, start_date=?, deadline=?, notes=?, progress=?, updated_at=? WHERE id=?').run(contract_id, case_name, service_type, status, priority, assignee, start_date, deadline, notes, progress, now(), req.params.id);
+  res.json(await db.prepare('SELECT cs.*, ct.contract_no, cl.name as client_name FROM cases cs LEFT JOIN contracts ct ON cs.contract_id = ct.id LEFT JOIN clients cl ON ct.client_id = cl.id WHERE cs.id = ?').get(req.params.id));
 });
 
-app.delete('/api/cases/:id', (req, res) => {
-  db.prepare('DELETE FROM cases WHERE id = ?').run(req.params.id);
+app.delete('/api/cases/:id', async (req, res) => {
+  await db.prepare('DELETE FROM cases WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
 
 // ============================================================
 // API: PAYMENTS
 // ============================================================
-app.get('/api/payments', (req, res) => {
+app.get('/api/payments', async (req, res) => {
   const { contract_id } = req.query;
   let sql = `SELECT p.*, ct.contract_no, cl.name as client_name FROM payments p LEFT JOIN contracts ct ON p.contract_id = ct.id LEFT JOIN clients cl ON ct.client_id = cl.id WHERE 1=1`;
   const params = [];
   if (contract_id) { sql += ' AND p.contract_id = ?'; params.push(contract_id); }
   sql += ' ORDER BY p.payment_date DESC';
-  res.json(db.prepare(sql).all(...params));
+  res.json(await db.prepare(sql).all(...params));
 });
 
-app.post('/api/payments', (req, res) => {
+app.post('/api/payments', async (req, res) => {
   const id = genId();
   const { contract_id, amount, payment_date, method, reference_no, notes } = req.body;
-  db.prepare('INSERT INTO payments (id, contract_id, amount, payment_date, method, reference_no, notes) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, contract_id, amount, payment_date, method, reference_no, notes);
+  await db.prepare('INSERT INTO payments (id, contract_id, amount, payment_date, method, reference_no, notes) VALUES (?, ?, ?, ?, ?, ?, ?)').run(id, contract_id, amount, payment_date, method, reference_no, notes);
   // Update contract paid amount
-  const total = db.prepare('SELECT SUM(amount) as total FROM payments WHERE contract_id = ?').get(contract_id).total || 0;
-  const contract = db.prepare('SELECT value FROM contracts WHERE id = ?').get(contract_id);
+  const total = await db.prepare('SELECT SUM(amount) as total FROM payments WHERE contract_id = ?').get(contract_id).total || 0;
+  const contract = await db.prepare('SELECT value FROM contracts WHERE id = ?').get(contract_id);
   const paymentStatus = total >= contract.value ? 'Đã thanh toán' : total > 0 ? 'Thanh toán một phần' : 'Chưa thanh toán';
-  db.prepare('UPDATE contracts SET paid_amount = ?, payment_status = ? WHERE id = ?').run(total, paymentStatus, contract_id);
-  res.status(201).json(db.prepare('SELECT * FROM payments WHERE id = ?').get(id));
+  await db.prepare('UPDATE contracts SET paid_amount = ?, payment_status = ? WHERE id = ?').run(total, paymentStatus, contract_id);
+  res.status(201).json(await db.prepare('SELECT * FROM payments WHERE id = ?').get(id));
 });
 
 // ============================================================
 // API: DASHBOARD / STATISTICS
 // ============================================================
-app.get('/api/dashboard', (req, res) => {
+app.get('/api/dashboard', async (req, res) => {
   const stats = {
     clients: {
-      total: db.prepare('SELECT COUNT(*) as c FROM clients').get().c,
-      active: db.prepare("SELECT COUNT(*) as c FROM clients WHERE status = 'Đang hoạt động'").get().c,
-      potential: db.prepare("SELECT COUNT(*) as c FROM clients WHERE status = 'Tiềm năng'").get().c,
-      by_country: db.prepare('SELECT country, COUNT(*) as count FROM clients GROUP BY country ORDER BY count DESC').all(),
-      by_industry: db.prepare('SELECT industry, COUNT(*) as count FROM clients GROUP BY industry ORDER BY count DESC').all(),
+      total: await db.prepare('SELECT COUNT(*) as c FROM clients').get().c,
+      active: await db.prepare("SELECT COUNT(*) as c FROM clients WHERE status = 'Đang hoạt động'").get().c,
+      potential: await db.prepare("SELECT COUNT(*) as c FROM clients WHERE status = 'Tiềm năng'").get().c,
+      by_country: await db.prepare('SELECT country, COUNT(*) as count FROM clients GROUP BY country ORDER BY count DESC').all(),
+      by_industry: await db.prepare('SELECT industry, COUNT(*) as count FROM clients GROUP BY industry ORDER BY count DESC').all(),
     },
     contracts: {
-      total: db.prepare('SELECT COUNT(*) as c FROM contracts').get().c,
-      active: db.prepare("SELECT COUNT(*) as c FROM contracts WHERE status = 'Đang thực hiện'").get().c,
-      total_value: db.prepare('SELECT COALESCE(SUM(value), 0) as v FROM contracts').get().v,
-      total_paid: db.prepare('SELECT COALESCE(SUM(paid_amount), 0) as v FROM contracts').get().v,
-      by_service: db.prepare('SELECT service_type, COUNT(*) as count, SUM(value) as total_value FROM contracts GROUP BY service_type ORDER BY count DESC').all(),
-      by_status: db.prepare('SELECT status, COUNT(*) as count FROM contracts GROUP BY status').all(),
+      total: await db.prepare('SELECT COUNT(*) as c FROM contracts').get().c,
+      active: await db.prepare("SELECT COUNT(*) as c FROM contracts WHERE status = 'Đang thực hiện'").get().c,
+      total_value: await db.prepare('SELECT COALESCE(SUM(value), 0) as v FROM contracts').get().v,
+      total_paid: await db.prepare('SELECT COALESCE(SUM(paid_amount), 0) as v FROM contracts').get().v,
+      by_service: await db.prepare('SELECT service_type, COUNT(*) as count, SUM(value) as total_value FROM contracts GROUP BY service_type ORDER BY count DESC').all(),
+      by_status: await db.prepare('SELECT status, COUNT(*) as count FROM contracts GROUP BY status').all(),
     },
     cases: {
-      total: db.prepare('SELECT COUNT(*) as c FROM cases').get().c,
-      active: db.prepare("SELECT COUNT(*) as c FROM cases WHERE status NOT IN ('Đã cấp phép', 'Từ chối')").get().c,
-      urgent: db.prepare("SELECT COUNT(*) as c FROM cases WHERE priority = 'Cao' AND status NOT IN ('Đã cấp phép', 'Từ chối')").get().c,
-      by_status: db.prepare('SELECT status, COUNT(*) as count FROM cases GROUP BY status').all(),
-      upcoming_deadlines: db.prepare("SELECT cs.*, ct.contract_no, cl.name as client_name FROM cases cs LEFT JOIN contracts ct ON cs.contract_id = ct.id LEFT JOIN clients cl ON ct.client_id = cl.id WHERE cs.deadline IS NOT NULL AND cs.status NOT IN ('Đã cấp phép', 'Từ chối') AND cs.deadline >= date('now') AND cs.deadline <= date('now', '+30 days') ORDER BY cs.deadline ASC").all(),
+      total: await db.prepare('SELECT COUNT(*) as c FROM cases').get().c,
+      active: await db.prepare("SELECT COUNT(*) as c FROM cases WHERE status NOT IN ('Đã cấp phép', 'Từ chối')").get().c,
+      urgent: await db.prepare("SELECT COUNT(*) as c FROM cases WHERE priority = 'Cao' AND status NOT IN ('Đã cấp phép', 'Từ chối')").get().c,
+      by_status: await db.prepare('SELECT status, COUNT(*) as count FROM cases GROUP BY status').all(),
+      upcoming_deadlines: await db.prepare("SELECT cs.*, ct.contract_no, cl.name as client_name FROM cases cs LEFT JOIN contracts ct ON cs.contract_id = ct.id LEFT JOIN clients cl ON ct.client_id = cl.id WHERE cs.deadline IS NOT NULL AND cs.status NOT IN ('Đã cấp phép', 'Từ chối') AND cs.deadline >= CURRENT_DATE AND cs.deadline <= CURRENT_DATE + INTERVAL '30 days' ORDER BY cs.deadline ASC").all(),
     },
-    recent_activities: db.prepare('SELECT * FROM activities ORDER BY created_at DESC LIMIT 20').all(),
+    recent_activities: await db.prepare('SELECT * FROM activities ORDER BY created_at DESC LIMIT 20').all(),
   };
   res.json(stats);
 });
@@ -251,29 +263,29 @@ app.get('/api/dashboard', (req, res) => {
 // ============================================================
 // API: SEARCH
 // ============================================================
-app.get('/api/search', (req, res) => {
+app.get('/api/search', async (req, res) => {
   const { q } = req.query;
   if (!q || q.length < 2) return res.json({ clients: [], contracts: [], cases: [] });
   const term = `%${q}%`;
   res.json({
-    clients: db.prepare('SELECT * FROM clients WHERE name LIKE ? OR representative LIKE ? OR email LIKE ? OR country LIKE ? LIMIT 20').all(term, term, term, term),
-    contracts: db.prepare('SELECT c.*, cl.name as client_name FROM contracts c LEFT JOIN clients cl ON c.client_id = cl.id WHERE c.contract_no LIKE ? OR cl.name LIKE ? OR c.service_type LIKE ? LIMIT 20').all(term, term, term),
-    cases: db.prepare('SELECT cs.*, ct.contract_no, cl.name as client_name FROM cases cs LEFT JOIN contracts ct ON cs.contract_id = ct.id LEFT JOIN clients cl ON ct.client_id = cl.id WHERE cs.case_name LIKE ? OR cl.name LIKE ? OR cs.assignee LIKE ? LIMIT 20').all(term, term, term),
+    clients: await db.prepare('SELECT * FROM clients WHERE name LIKE ? OR representative LIKE ? OR email LIKE ? OR country LIKE ? LIMIT 20').all(term, term, term, term),
+    contracts: await db.prepare('SELECT c.*, cl.name as client_name FROM contracts c LEFT JOIN clients cl ON c.client_id = cl.id WHERE c.contract_no LIKE ? OR cl.name LIKE ? OR c.service_type LIKE ? LIMIT 20').all(term, term, term),
+    cases: await db.prepare('SELECT cs.*, ct.contract_no, cl.name as client_name FROM cases cs LEFT JOIN contracts ct ON cs.contract_id = ct.id LEFT JOIN clients cl ON ct.client_id = cl.id WHERE cs.case_name LIKE ? OR cl.name LIKE ? OR cs.assignee LIKE ? LIMIT 20').all(term, term, term),
   });
 });
 
 // ============================================================
 // API: REFERENCE DATA
 // ============================================================
-app.get('/api/reference/countries', (req, res) => {
+app.get('/api/reference/countries', async (req, res) => {
   res.json(["Nhật Bản", "Hàn Quốc", "Trung Quốc", "Đài Loan", "Singapore", "Thái Lan", "Hoa Kỳ", "Đức", "Pháp", "Anh", "Hà Lan", "Úc", "Canada", "Ấn Độ", "Hồng Kông", "Malaysia"]);
 });
 
-app.get('/api/reference/industries', (req, res) => {
+app.get('/api/reference/industries', async (req, res) => {
   res.json(["Sản xuất", "Thương mại", "Dịch vụ", "Công nghệ thông tin", "Thực phẩm & Đồ uống", "Mỹ phẩm", "Hóa chất", "Dược phẩm", "Bất động sản", "Logistics", "Giáo dục", "Y tế", "Nông nghiệp", "Năng lượng"]);
 });
 
-app.get('/api/reference/services', (req, res) => {
+app.get('/api/reference/services', async (req, res) => {
   res.json(["Giấy chứng nhận đầu tư (IRC)", "Giấy chứng nhận đăng ký doanh nghiệp (ERC)", "Giấy phép con - An ninh mạng", "Giấy phép con - Giáo dục", "Giấy phép con - Kinh doanh hóa chất", "Công bố chất lượng thực phẩm nhập khẩu", "Công bố mỹ phẩm nhập khẩu", "Giấy phép lao động (Work Permit)", "Thẻ tạm trú (TRC)", "Thay đổi nội dung đăng ký đầu tư", "Thay đổi nội dung đăng ký doanh nghiệp", "Giấy phép kinh doanh nhập khẩu", "Đăng ký thuế & kê khai thuế ban đầu", "Tư vấn pháp lý đầu tư", "Mở tài khoản vốn đầu tư"]);
 });
 
@@ -283,9 +295,10 @@ app.get('/api/reference/services', (req, res) => {
 
 // In-memory cache for fuzzy search
 let _inciNamesCache = null;
-function getInciNamesCache() {
+async function getInciNamesCache() {
   if (!_inciNamesCache) {
-    _inciNamesCache = db.prepare('SELECT inci_name FROM cosing_ingredients').all().map(r => r.inci_name);
+    const rows = await db.prepare('SELECT inci_name FROM cosing_ingredients').all();
+    _inciNamesCache = rows.map(r => r.inci_name);
   }
   return _inciNamesCache;
 }
@@ -324,7 +337,7 @@ function fuzzySearchNames(query, maxDist) {
   return results.slice(0, 8).map(r => r.name);
 }
 
-app.get('/api/cosing/search', (req, res) => {
+app.get('/api/cosing/search', async (req, res) => {
   const { q, annex, limit: lim } = req.query;
   if (!q || q.trim().length < 2) return res.json([]);
   const trimmed = q.trim();
@@ -335,7 +348,7 @@ app.get('/api/cosing/search', (req, res) => {
   if (annex && annex !== 'all') { sql += ' AND annex = ?'; params.push(annex); }
   sql += ' ORDER BY inci_name ASC LIMIT ?';
   params.push(maxRows);
-  const results = db.prepare(sql).all(...params);
+  const results = await db.prepare(sql).all(...params);
 
   // Fuzzy fallback when no exact/LIKE match
   if (results.length === 0 && trimmed.length >= 3) {
@@ -343,7 +356,7 @@ app.get('/api/cosing/search', (req, res) => {
     const fuzzyNames = fuzzySearchNames(trimmed, maxDist);
     if (fuzzyNames.length > 0) {
       const placeholders = fuzzyNames.map(() => '?').join(',');
-      const fuzzyResults = db.prepare(
+      const fuzzyResults = await db.prepare(
         `SELECT * FROM cosing_ingredients WHERE inci_name IN (${placeholders}) ORDER BY inci_name ASC`
       ).all(...fuzzyNames);
       return res.json(fuzzyResults.map(r => ({ ...r, _fuzzy: true, _query: trimmed })));
@@ -353,19 +366,19 @@ app.get('/api/cosing/search', (req, res) => {
   res.json(results);
 });
 
-app.get('/api/cosing/stats', (req, res) => {
+app.get('/api/cosing/stats', async (req, res) => {
   res.json({
-    total: db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c,
-    by_annex: db.prepare("SELECT annex, COUNT(*) as count FROM cosing_ingredients GROUP BY annex ORDER BY count DESC").all(),
+    total: await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c,
+    by_annex: await db.prepare("SELECT annex, COUNT(*) as count FROM cosing_ingredients GROUP BY annex ORDER BY count DESC").all(),
   });
 });
 
 // GET /api/ingredients/total — tổng số thành phần toàn hệ thống
-app.get('/api/ingredients/total', (req, res) => {
-  const cosing     = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
-  const countryReg = db.prepare('SELECT COUNT(DISTINCT LOWER(TRIM(inci_name))) as c FROM country_regs').get().c;
-  const countryDb  = db.prepare('SELECT COUNT(*) as c FROM country_ingredients').get().c;
-  const byCountry  = db.prepare('SELECT country, COUNT(*) as count FROM country_ingredients GROUP BY country ORDER BY count DESC').all();
+app.get('/api/ingredients/total', async (req, res) => {
+  const cosing     = await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
+  const countryReg = await db.prepare('SELECT COUNT(DISTINCT LOWER(TRIM(inci_name))) as c FROM country_regs').get().c;
+  const countryDb  = await db.prepare('SELECT COUNT(*) as c FROM country_ingredients').get().c;
+  const byCountry  = await db.prepare('SELECT country, COUNT(*) as count FROM country_ingredients GROUP BY country ORDER BY count DESC').all();
   res.json({
     cosing_eu: cosing,
     country_regs: countryReg,
@@ -376,10 +389,10 @@ app.get('/api/ingredients/total', (req, res) => {
 });
 
 // GET /api/country-regs?inci=POLYSILICONE-15
-app.get('/api/country-regs', (req, res) => {
+app.get('/api/country-regs', async (req, res) => {
   const { inci } = req.query;
   if (!inci) return res.json([]);
-  const rows = db.prepare(`
+  const rows = await db.prepare(`
     SELECT country, status, max_conc, conditions, source_ref
     FROM country_regs
     WHERE LOWER(TRIM(inci_name)) = LOWER(TRIM(?))
@@ -389,11 +402,11 @@ app.get('/api/country-regs', (req, res) => {
 });
 
 // POST /api/country-regs/batch — { incis: ["NAME1", "NAME2", ...] }
-app.post('/api/country-regs/batch', (req, res) => {
+app.post('/api/country-regs/batch', async (req, res) => {
   const { incis } = req.body;
   if (!Array.isArray(incis) || incis.length === 0) return res.json({});
   const result = {};
-  const stmt = db.prepare(`
+  const stmt = await db.prepare(`
     SELECT country, status, max_conc, conditions, source_ref
     FROM country_regs
     WHERE LOWER(TRIM(inci_name)) = LOWER(TRIM(?))
@@ -405,11 +418,11 @@ app.post('/api/country-regs/batch', (req, res) => {
   res.json(result);
 });
 
-app.post('/api/cosing/import', (req, res) => {
+app.post('/api/cosing/import', async (req, res) => {
   // Accept array of ingredient objects (full field names)
   const rows = req.body;
   if (!Array.isArray(rows) || rows.length === 0) return res.status(400).json({ error: 'Body must be a non-empty array' });
-  const insert = db.prepare(`
+  const insert = await db.prepare(`
     INSERT OR IGNORE INTO cosing_ingredients
       (cosing_ref_no, inci_name, cas_no, ec_no, functions, annex, max_conc, origin, uv_range, sccs_assessment, sccs_ref, source, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
@@ -500,7 +513,7 @@ function parseAnnex(raw) {
   return m ? m[1].toUpperCase() : null;
 }
 
-app.post('/api/cosing/import-csv', (req, res) => {
+app.post('/api/cosing/import-csv', async (req, res) => {
   const { csv, filename } = req.body;
   if (!csv || typeof csv !== 'string') {
     return res.status(400).json({ error: 'Body must be { csv: "...", filename: "..." }' });
@@ -534,7 +547,7 @@ app.post('/api/cosing/import-csv', (req, res) => {
     return res.status(400).json({ error: 'No INCI Name column found', headers: rawHdrsRef });
   }
 
-  const insert = db.prepare(`
+  const insert = await db.prepare(`
     INSERT OR IGNORE INTO cosing_ingredients
       (cosing_ref_no, inci_name, cas_no, ec_no, functions, annex, max_conc, origin, uv_range, sccs_assessment, sccs_ref, source, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'cosing_csv', datetime('now'))
@@ -566,7 +579,7 @@ app.post('/api/cosing/import-csv', (req, res) => {
   tx();
 
   invalidateInciCache();
-  const total = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
+  const total = await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
   res.json({ imported, skipped, total_in_db: total });
 });
 
@@ -606,7 +619,7 @@ app.get('/api/cosing/auto-import', async (req, res) => {
 
   const send = (data) => res.write(`data: ${JSON.stringify(data)}\n\n`);
 
-  const insert = db.prepare(`
+  const insert = await db.prepare(`
     INSERT OR IGNORE INTO cosing_ingredients
       (cosing_ref_no, inci_name, cas_no, ec_no, functions, annex, max_conc,
        origin, uv_range, sccs_assessment, sccs_ref, source, updated_at)
@@ -665,7 +678,7 @@ app.get('/api/cosing/auto-import', async (req, res) => {
     }
 
     invalidateInciCache();
-    const total = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
+    const total = await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
     send({ status: 'done', imported: totalImported, skipped: totalSkipped, total_in_db: total,
            msg: `Hoàn thành! ${totalImported.toLocaleString()} thành phần đã import. Tổng trong DB: ${total.toLocaleString()}` });
   } catch(e) {
@@ -710,7 +723,7 @@ function mapCountryHeader(h, country) {
 }
 
 // GET /api/country-db/search?country=KR&q=...
-app.get('/api/country-db/search', (req, res) => {
+app.get('/api/country-db/search', async (req, res) => {
   const { q, country, limit: lim } = req.query;
   if (!q || q.trim().length < 2) return res.json([]);
   const term = `%${q.trim()}%`;
@@ -720,19 +733,19 @@ app.get('/api/country-db/search', (req, res) => {
   if (country && country !== 'ALL') { sql += ' AND country = ?'; params.push(country); }
   sql += ' ORDER BY country, inci_name ASC LIMIT ?';
   params.push(maxRows);
-  res.json(db.prepare(sql).all(...params));
+  res.json(await db.prepare(sql).all(...params));
 });
 
 // GET /api/country-db/stats — count per country
-app.get('/api/country-db/stats', (req, res) => {
-  const rows = db.prepare(`
+app.get('/api/country-db/stats', async (req, res) => {
+  const rows = await db.prepare(`
     SELECT country, COUNT(*) as count FROM country_ingredients GROUP BY country ORDER BY country
   `).all();
   res.json(rows);
 });
 
 // POST /api/country-db/import  { country: "KR", csv: "...", filename: "..." }
-app.post('/api/country-db/import', (req, res) => {
+app.post('/api/country-db/import', async (req, res) => {
   const { csv, country, filename } = req.body;
   if (!csv || typeof csv !== 'string') return res.status(400).json({ error: 'Missing csv' });
   if (!country) return res.status(400).json({ error: 'Missing country code (e.g. KR, JP, CN, VN, US)' });
@@ -763,7 +776,7 @@ app.post('/api/country-db/import', (req, res) => {
     });
   }
 
-  const insert = db.prepare(`
+  const insert = await db.prepare(`
     INSERT INTO country_ingredients
       (country, inci_name, local_name, cas_no, ec_no, status, max_conc, functions, product_type, conditions, notes, source, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
@@ -792,37 +805,37 @@ app.post('/api/country-db/import', (req, res) => {
   });
   tx();
 
-  const total = db.prepare('SELECT COUNT(*) as c FROM country_ingredients WHERE country = ?').get(country).c;
+  const total = await db.prepare('SELECT COUNT(*) as c FROM country_ingredients WHERE country = ?').get(country).c;
   res.json({ imported, skipped, total_in_db: total, country });
 });
 
 // DELETE /api/country-db/clear?country=KR  (omit country to clear all)
-app.delete('/api/country-db/clear', (req, res) => {
+app.delete('/api/country-db/clear', async (req, res) => {
   const { country } = req.query;
   if (country) {
-    db.prepare('DELETE FROM country_ingredients WHERE country = ?').run(country);
+    await db.prepare('DELETE FROM country_ingredients WHERE country = ?').run(country);
   } else {
-    db.prepare('DELETE FROM country_ingredients').run();
+    await db.prepare('DELETE FROM country_ingredients').run();
   }
-  const rows = db.prepare('SELECT country, COUNT(*) as count FROM country_ingredients GROUP BY country').all();
+  const rows = await db.prepare('SELECT country, COUNT(*) as count FROM country_ingredients GROUP BY country').all();
   res.json({ cleared: country || 'ALL', remaining: rows });
 });
 
 // Legacy KR aliases
 app.get('/api/kr/search', (req, res) => res.redirect(`/api/country-db/search?country=KR&${new URLSearchParams(req.query)}`));
-app.get('/api/kr/stats',  (req, res) => {
-  const c = db.prepare("SELECT COUNT(*) as c FROM country_ingredients WHERE country='KR'").get().c;
+app.get('/api/kr/stats', async (req, res) => {
+  const c = await db.prepare("SELECT COUNT(*) as c FROM country_ingredients WHERE country='KR'").get().c;
   res.json({ total: c });
 });
 
-app.delete('/api/cosing/clear', (req, res) => {
+app.delete('/api/cosing/clear', async (req, res) => {
   const { keep_seed } = req.query;
   if (keep_seed === '1') {
-    db.prepare("DELETE FROM cosing_ingredients WHERE source = 'cosing_csv'").run();
+    await db.prepare("DELETE FROM cosing_ingredients WHERE source = 'cosing_csv'").run();
   } else {
-    db.prepare('DELETE FROM cosing_ingredients').run();
+    await db.prepare('DELETE FROM cosing_ingredients').run();
   }
-  const total = db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
+  const total = await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get().c;
   res.json({ total_in_db: total });
 });
 
@@ -859,33 +872,39 @@ async function extractText(buffer, mimetype, originalname) {
   return buffer.toString('utf-8');
 }
 
-// Index source chunks into FTS5
-function indexSourceChunks(sourceId, notebookId, text) {
-  db.prepare('DELETE FROM notebook_chunks_fts WHERE source_id = ?').run(sourceId);
+// Index source chunks into PostgreSQL FTS
+async function indexSourceChunks(sourceId, notebookId, text) {
+  await db.prepare('DELETE FROM notebook_chunks WHERE source_id = ?').run(sourceId);
   const chunks = chunkText(text);
-  const ins = db.prepare('INSERT INTO notebook_chunks_fts (chunk_text, source_id, notebook_id, chunk_index) VALUES (?, ?, ?, ?)');
-  const tx = db.transaction(() => chunks.forEach((c, i) => ins.run(c, sourceId, notebookId, i)));
-  tx();
+  await db.transaction(async (t) => {
+    for (let i = 0; i < chunks.length; i++) {
+      await t.run(
+        'INSERT INTO notebook_chunks (chunk_text, source_id, notebook_id, chunk_index) VALUES (?, ?, ?, ?)',
+        [chunks[i], sourceId, notebookId, i]
+      );
+    }
+  });
   return chunks.length;
 }
 
-// Retrieve top-K relevant chunks for a query
-function retrieveChunks(notebookId, query, k = 8) {
-  const rows = db.prepare(`
+// Retrieve top-K relevant chunks for a query (PostgreSQL FTS via tsvector)
+async function retrieveChunks(notebookId, query, k = 8) {
+  const rows = await db.prepare(`
     SELECT f.chunk_text, f.source_id, f.chunk_index,
            s.original_name as source_name
-    FROM notebook_chunks_fts f
+    FROM notebook_chunks f
     JOIN notebook_sources s ON s.id = f.source_id
-    WHERE f.notebook_id = ? AND notebook_chunks_fts MATCH ?
-    ORDER BY rank
+    WHERE f.notebook_id = ?
+      AND f.tsv @@ plainto_tsquery('english', ?)
+    ORDER BY ts_rank(f.tsv, plainto_tsquery('english', ?)) DESC
     LIMIT ?
-  `).all(notebookId, query.replace(/[^a-zA-ZÀ-ỹ0-9 ]/g, ' ').trim() || '""', k);
+  `).all(notebookId, query.replace(/[^a-zA-ZÀ-ỹ0-9 ]/g, ' ').trim() || 'the', query.replace(/[^a-zA-ZÀ-ỹ0-9 ]/g, ' ').trim() || 'the', k);
   return rows;
 }
 
 // ── CRUD Notebooks ──────────────────────────────────────────
-app.get('/api/notebooks', (req, res) => {
-  const rows = db.prepare(`
+app.get('/api/notebooks', async (req, res) => {
+  const rows = await db.prepare(`
     SELECT n.*, COUNT(s.id) as source_count,
            (SELECT COUNT(*) FROM notebook_chats WHERE notebook_id = n.id) as chat_count
     FROM notebooks n
@@ -895,33 +914,33 @@ app.get('/api/notebooks', (req, res) => {
   res.json(rows);
 });
 
-app.post('/api/notebooks', (req, res) => {
+app.post('/api/notebooks', async (req, res) => {
   const id = genId();
   const { title, description } = req.body;
   if (!title) return res.status(400).json({ error: 'title required' });
-  db.prepare('INSERT INTO notebooks (id, title, description) VALUES (?, ?, ?)').run(id, title, description || '');
-  res.status(201).json(db.prepare('SELECT * FROM notebooks WHERE id = ?').get(id));
+  await db.prepare('INSERT INTO notebooks (id, title, description) VALUES (?, ?, ?)').run(id, title, description || '');
+  res.status(201).json(await db.prepare('SELECT * FROM notebooks WHERE id = ?').get(id));
 });
 
-app.put('/api/notebooks/:id', (req, res) => {
+app.put('/api/notebooks/:id', async (req, res) => {
   const { title, description } = req.body;
-  db.prepare('UPDATE notebooks SET title=?, description=?, updated_at=? WHERE id=?').run(title, description || '', now(), req.params.id);
-  res.json(db.prepare('SELECT * FROM notebooks WHERE id = ?').get(req.params.id));
+  await db.prepare('UPDATE notebooks SET title=?, description=?, updated_at=? WHERE id=?').run(title, description || '', now(), req.params.id);
+  res.json(await db.prepare('SELECT * FROM notebooks WHERE id = ?').get(req.params.id));
 });
 
-app.delete('/api/notebooks/:id', (req, res) => {
-  db.prepare('DELETE FROM notebooks WHERE id = ?').run(req.params.id);
+app.delete('/api/notebooks/:id', async (req, res) => {
+  await db.prepare('DELETE FROM notebooks WHERE id = ?').run(req.params.id);
   res.json({ success: true });
 });
 
 // ── Sources ──────────────────────────────────────────────────
-app.get('/api/notebooks/:id/sources', (req, res) => {
-  const rows = db.prepare('SELECT id, notebook_id, original_name, file_type, file_size, summary, created_at FROM notebook_sources WHERE notebook_id = ? ORDER BY created_at ASC').all(req.params.id);
+app.get('/api/notebooks/:id/sources', async (req, res) => {
+  const rows = await db.prepare('SELECT id, notebook_id, original_name, file_type, file_size, summary, created_at FROM notebook_sources WHERE notebook_id = ? ORDER BY created_at ASC').all(req.params.id);
   res.json(rows);
 });
 
 app.post('/api/notebooks/:id/sources', upload.single('file'), async (req, res) => {
-  const nb = db.prepare('SELECT id FROM notebooks WHERE id = ?').get(req.params.id);
+  const nb = await db.prepare('SELECT id FROM notebooks WHERE id = ?').get(req.params.id);
   if (!nb) return res.status(404).json({ error: 'Notebook not found' });
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
@@ -930,11 +949,11 @@ app.post('/api/notebooks/:id/sources', upload.single('file'), async (req, res) =
     if (!text || text.trim().length < 10) return res.status(400).json({ error: 'Không thể đọc nội dung file' });
 
     const srcId = genId();
-    db.prepare('INSERT INTO notebook_sources (id, notebook_id, filename, original_name, file_type, file_size, content_text) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    await db.prepare('INSERT INTO notebook_sources (id, notebook_id, filename, original_name, file_type, file_size, content_text) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(srcId, req.params.id, req.file.originalname, req.file.originalname, req.file.mimetype, req.file.size, text);
 
     const chunkCount = indexSourceChunks(srcId, req.params.id, text);
-    db.prepare('UPDATE notebooks SET updated_at=? WHERE id=?').run(now(), req.params.id);
+    await db.prepare('UPDATE notebooks SET updated_at=? WHERE id=?').run(now(), req.params.id);
 
     // Auto-summarize with OpenAI (async, don't block response)
     res.status(201).json({
@@ -954,9 +973,9 @@ app.post('/api/notebooks/:id/sources', upload.single('file'), async (req, res) =
           { role: 'user', content: excerpt },
         ],
         max_tokens: 200,
-      }).then(r => {
+      }).then(async r => {
         const summary = r.choices[0]?.message?.content || '';
-        db.prepare('UPDATE notebook_sources SET summary=? WHERE id=?').run(summary, srcId);
+        await db.prepare('UPDATE notebook_sources SET summary=? WHERE id=?').run(summary, srcId);
       }).catch(() => {});
     }
   } catch (e) {
@@ -964,20 +983,20 @@ app.post('/api/notebooks/:id/sources', upload.single('file'), async (req, res) =
   }
 });
 
-app.delete('/api/notebooks/:id/sources/:sid', (req, res) => {
-  db.prepare('DELETE FROM notebook_chunks_fts WHERE source_id = ?').run(req.params.sid);
-  db.prepare('DELETE FROM notebook_sources WHERE id = ? AND notebook_id = ?').run(req.params.sid, req.params.id);
+app.delete('/api/notebooks/:id/sources/:sid', async (req, res) => {
+  await db.prepare('DELETE FROM notebook_chunks WHERE source_id = ?').run(req.params.sid);
+  await db.prepare('DELETE FROM notebook_sources WHERE id = ? AND notebook_id = ?').run(req.params.sid, req.params.id);
   res.json({ success: true });
 });
 
 // ── Chat history ─────────────────────────────────────────────
-app.get('/api/notebooks/:id/chats', (req, res) => {
-  const rows = db.prepare('SELECT * FROM notebook_chats WHERE notebook_id = ? ORDER BY created_at ASC').all(req.params.id);
+app.get('/api/notebooks/:id/chats', async (req, res) => {
+  const rows = await db.prepare('SELECT * FROM notebook_chats WHERE notebook_id = ? ORDER BY created_at ASC').all(req.params.id);
   res.json(rows);
 });
 
-app.delete('/api/notebooks/:id/chats', (req, res) => {
-  db.prepare('DELETE FROM notebook_chats WHERE notebook_id = ?').run(req.params.id);
+app.delete('/api/notebooks/:id/chats', async (req, res) => {
+  await db.prepare('DELETE FROM notebook_chats WHERE notebook_id = ?').run(req.params.id);
   res.json({ success: true });
 });
 
@@ -987,13 +1006,13 @@ app.post('/api/notebooks/:id/chat', async (req, res) => {
   if (!message) return res.status(400).json({ error: 'message required' });
   if (!process.env.OPENAI_API_KEY) return res.status(503).json({ error: 'OPENAI_API_KEY chưa được cấu hình' });
 
-  const nb = db.prepare('SELECT * FROM notebooks WHERE id = ?').get(req.params.id);
+  const nb = await db.prepare('SELECT * FROM notebooks WHERE id = ?').get(req.params.id);
   if (!nb) return res.status(404).json({ error: 'Notebook not found' });
 
-  const sourceCount = db.prepare('SELECT COUNT(*) as c FROM notebook_sources WHERE notebook_id = ?').get(req.params.id).c;
+  const sourceCount = await db.prepare('SELECT COUNT(*) as c FROM notebook_sources WHERE notebook_id = ?').get(req.params.id).c;
 
   // Save user message
-  db.prepare('INSERT INTO notebook_chats (id, notebook_id, role, content) VALUES (?, ?, ?, ?)')
+  await db.prepare('INSERT INTO notebook_chats (id, notebook_id, role, content) VALUES (?, ?, ?, ?)')
     .run(genId(), req.params.id, 'user', message);
 
   // Retrieve relevant chunks via FTS
@@ -1002,7 +1021,7 @@ app.post('/api/notebooks/:id/chat', async (req, res) => {
   // If FTS returns nothing, fall back to first chunks of all sources
   let contextChunks = chunks;
   if (contextChunks.length === 0 && sourceCount > 0) {
-    contextChunks = db.prepare(`
+    contextChunks = await db.prepare(`
       SELECT f.chunk_text, f.source_id, f.chunk_index, s.original_name as source_name
       FROM notebook_chunks_fts f
       JOIN notebook_sources s ON s.id = f.source_id
@@ -1022,7 +1041,7 @@ app.post('/api/notebooks/:id/chat', async (req, res) => {
     : `Bạn là trợ lý AI. Notebook này chưa có tài liệu nào. Hãy nhắc người dùng upload tài liệu trước.`;
 
   // Previous chat (last 6 turns)
-  const history = db.prepare('SELECT role, content FROM notebook_chats WHERE notebook_id = ? ORDER BY created_at DESC LIMIT 12').all(req.params.id).reverse();
+  const history = await db.prepare('SELECT role, content FROM notebook_chats WHERE notebook_id = ? ORDER BY created_at DESC LIMIT 12').all(req.params.id).reverse();
   const messages = [
     { role: 'system', content: systemPrompt },
     ...history.slice(0, -1).map(h => ({ role: h.role, content: h.content })),
@@ -1054,9 +1073,9 @@ app.post('/api/notebooks/:id/chat', async (req, res) => {
     }
 
     // Save assistant response
-    db.prepare('INSERT INTO notebook_chats (id, notebook_id, role, content, sources_used) VALUES (?, ?, ?, ?, ?)')
+    await db.prepare('INSERT INTO notebook_chats (id, notebook_id, role, content, sources_used) VALUES (?, ?, ?, ?, ?)')
       .run(genId(), req.params.id, 'assistant', fullContent, JSON.stringify(sourcesUsed));
-    db.prepare('UPDATE notebooks SET updated_at=? WHERE id=?').run(now(), req.params.id);
+    await db.prepare('UPDATE notebooks SET updated_at=? WHERE id=?').run(now(), req.params.id);
 
     send({ type: 'done', sources: sourcesUsed });
     res.end();
@@ -1069,7 +1088,7 @@ app.post('/api/notebooks/:id/chat', async (req, res) => {
 // ── Summary endpoint ─────────────────────────────────────────
 app.post('/api/notebooks/:id/summarize', async (req, res) => {
   if (!process.env.OPENAI_API_KEY) return res.status(503).json({ error: 'OPENAI_API_KEY chưa được cấu hình' });
-  const sources = db.prepare('SELECT original_name, content_text FROM notebook_sources WHERE notebook_id = ?').all(req.params.id);
+  const sources = await db.prepare('SELECT original_name, content_text FROM notebook_sources WHERE notebook_id = ?').all(req.params.id);
   if (!sources.length) return res.status(400).json({ error: 'Chưa có tài liệu nào' });
 
   const combined = sources.map(s => `## ${s.original_name}\n${s.content_text?.slice(0, 2000)}`).join('\n\n');
@@ -1189,27 +1208,27 @@ const CRM_TOOLS = [
 ];
 
 // Execute a CRM tool call
-function executeCrmTool(name, args) {
+async function executeCrmTool(name, args) {
   switch (name) {
     case 'get_dashboard_stats': {
       return {
         clients: {
-          total:     db.prepare('SELECT COUNT(*) as c FROM clients').get().c,
-          active:    db.prepare("SELECT COUNT(*) as c FROM clients WHERE status='Đang hoạt động'").get().c,
-          potential: db.prepare("SELECT COUNT(*) as c FROM clients WHERE status='Tiềm năng'").get().c,
-          by_country: db.prepare('SELECT country, COUNT(*) as count FROM clients GROUP BY country ORDER BY count DESC LIMIT 8').all(),
+          total:     await db.prepare('SELECT COUNT(*) as c FROM clients').get().c,
+          active:    await db.prepare("SELECT COUNT(*) as c FROM clients WHERE status='Đang hoạt động'").get().c,
+          potential: await db.prepare("SELECT COUNT(*) as c FROM clients WHERE status='Tiềm năng'").get().c,
+          by_country: await db.prepare('SELECT country, COUNT(*) as count FROM clients GROUP BY country ORDER BY count DESC LIMIT 8').all(),
         },
         contracts: {
-          total:       db.prepare('SELECT COUNT(*) as c FROM contracts').get().c,
-          active:      db.prepare("SELECT COUNT(*) as c FROM contracts WHERE status='Đang thực hiện'").get().c,
-          total_value: db.prepare('SELECT COALESCE(SUM(value),0) as v FROM contracts').get().v,
-          total_paid:  db.prepare('SELECT COALESCE(SUM(paid_amount),0) as v FROM contracts').get().v,
-          unpaid:      db.prepare("SELECT COUNT(*) as c FROM contracts WHERE payment_status='Chưa thanh toán'").get().c,
+          total:       await db.prepare('SELECT COUNT(*) as c FROM contracts').get().c,
+          active:      await db.prepare("SELECT COUNT(*) as c FROM contracts WHERE status='Đang thực hiện'").get().c,
+          total_value: await db.prepare('SELECT COALESCE(SUM(value),0) as v FROM contracts').get().v,
+          total_paid:  await db.prepare('SELECT COALESCE(SUM(paid_amount),0) as v FROM contracts').get().v,
+          unpaid:      await db.prepare("SELECT COUNT(*) as c FROM contracts WHERE payment_status='Chưa thanh toán'").get().c,
         },
         cases: {
-          total:  db.prepare('SELECT COUNT(*) as c FROM cases').get().c,
-          active: db.prepare("SELECT COUNT(*) as c FROM cases WHERE status NOT IN ('Đã cấp phép','Từ chối')").get().c,
-          urgent: db.prepare("SELECT COUNT(*) as c FROM cases WHERE priority='Cao' AND status NOT IN ('Đã cấp phép','Từ chối')").get().c,
+          total:  await db.prepare('SELECT COUNT(*) as c FROM cases').get().c,
+          active: await db.prepare("SELECT COUNT(*) as c FROM cases WHERE status NOT IN ('Đã cấp phép','Từ chối')").get().c,
+          urgent: await db.prepare("SELECT COUNT(*) as c FROM cases WHERE priority='Cao' AND status NOT IN ('Đã cấp phép','Từ chối')").get().c,
         },
       };
     }
@@ -1222,7 +1241,7 @@ function executeCrmTool(name, args) {
       if (args.status)   { sql += ' AND status = ?';   p.push(args.status); }
       if (args.search)   { sql += ' AND (name LIKE ? OR representative LIKE ? OR email LIKE ?)'; p.push(`%${args.search}%`, `%${args.search}%`, `%${args.search}%`); }
       sql += ' ORDER BY created_at DESC LIMIT 20';
-      return db.prepare(sql).all(...p);
+      return await db.prepare(sql).all(...p);
     }
 
     case 'search_contracts': {
@@ -1234,7 +1253,7 @@ function executeCrmTool(name, args) {
       if (args.payment_status) { sql += ' AND c.payment_status = ?'; p.push(args.payment_status); }
       if (args.search)         { sql += ' AND (c.contract_no LIKE ? OR cl.name LIKE ?)'; p.push(`%${args.search}%`, `%${args.search}%`); }
       sql += ' ORDER BY c.created_at DESC LIMIT 20';
-      return db.prepare(sql).all(...p);
+      return await db.prepare(sql).all(...p);
     }
 
     case 'search_cases': {
@@ -1249,12 +1268,12 @@ function executeCrmTool(name, args) {
       if (args.assignee) { sql += ' AND cs.assignee LIKE ?'; p.push(`%${args.assignee}%`); }
       if (args.search)   { sql += ' AND (cs.case_name LIKE ? OR cl.name LIKE ? OR cs.assignee LIKE ?)'; p.push(`%${args.search}%`, `%${args.search}%`, `%${args.search}%`); }
       sql += ' ORDER BY cs.deadline ASC LIMIT 20';
-      return db.prepare(sql).all(...p);
+      return await db.prepare(sql).all(...p);
     }
 
     case 'get_upcoming_deadlines': {
       const days = args.days || 30;
-      return db.prepare(`
+      return await db.prepare(`
         SELECT cs.case_name, cs.status, cs.priority, cs.assignee, cs.deadline, cs.progress,
                cl.name as client_name, ct.contract_no
         FROM cases cs
@@ -1262,27 +1281,27 @@ function executeCrmTool(name, args) {
         LEFT JOIN clients cl ON ct.client_id = cl.id
         WHERE cs.deadline IS NOT NULL
           AND cs.status NOT IN ('Đã cấp phép','Từ chối')
-          AND cs.deadline >= date('now')
-          AND cs.deadline <= date('now', '+' || ? || ' days')
+          AND cs.deadline >= CURRENT_DATE
+          AND cs.deadline <= CURRENT_DATE + (? || ' days')::INTERVAL
         ORDER BY cs.deadline ASC
       `).all(days);
     }
 
     case 'get_client_detail': {
-      const client = db.prepare('SELECT * FROM clients WHERE id = ?').get(args.client_id);
+      const client = await db.prepare('SELECT * FROM clients WHERE id = ?').get(args.client_id);
       if (!client) return { error: 'Không tìm thấy khách hàng' };
-      const contracts = db.prepare('SELECT id, contract_no, service_type, value, paid_amount, status, payment_status FROM contracts WHERE client_id = ? ORDER BY created_at DESC').all(args.client_id);
+      const contracts = await db.prepare('SELECT id, contract_no, service_type, value, paid_amount, status, payment_status FROM contracts WHERE client_id = ? ORDER BY created_at DESC').all(args.client_id);
       return { ...client, contracts };
     }
 
     case 'get_revenue_report': {
       return {
-        total_value:   db.prepare('SELECT COALESCE(SUM(value),0) as v FROM contracts').get().v,
-        total_paid:    db.prepare('SELECT COALESCE(SUM(paid_amount),0) as v FROM contracts').get().v,
-        total_debt:    db.prepare('SELECT COALESCE(SUM(value - paid_amount),0) as v FROM contracts WHERE status != \'Hủy\'').get().v,
-        by_service:    db.prepare('SELECT service_type, COUNT(*) as count, SUM(value) as total, SUM(paid_amount) as paid FROM contracts GROUP BY service_type ORDER BY total DESC').all(),
-        by_country:    db.prepare('SELECT cl.country, SUM(ct.value) as total, SUM(ct.paid_amount) as paid FROM contracts ct LEFT JOIN clients cl ON ct.client_id = cl.id GROUP BY cl.country ORDER BY total DESC').all(),
-        by_status:     db.prepare('SELECT status, COUNT(*) as count, SUM(value) as total FROM contracts GROUP BY status').all(),
+        total_value:   await db.prepare('SELECT COALESCE(SUM(value),0) as v FROM contracts').get().v,
+        total_paid:    await db.prepare('SELECT COALESCE(SUM(paid_amount),0) as v FROM contracts').get().v,
+        total_debt:    await db.prepare('SELECT COALESCE(SUM(value - paid_amount),0) as v FROM contracts WHERE status != \'Hủy\'').get().v,
+        by_service:    await db.prepare('SELECT service_type, COUNT(*) as count, SUM(value) as total, SUM(paid_amount) as paid FROM contracts GROUP BY service_type ORDER BY total DESC').all(),
+        by_country:    await db.prepare('SELECT cl.country, SUM(ct.value) as total, SUM(ct.paid_amount) as paid FROM contracts ct LEFT JOIN clients cl ON ct.client_id = cl.id GROUP BY cl.country ORDER BY total DESC').all(),
+        by_status:     await db.prepare('SELECT status, COUNT(*) as count, SUM(value) as total FROM contracts GROUP BY status').all(),
       };
     }
 
@@ -1360,7 +1379,7 @@ Hôm nay: ${new Date().toLocaleDateString('vi-VN')}.`;
 });
 
 // Serve frontend for all non-API routes
-app.get('*', (req, res) => {
+app.get('*', async (req, res) => {
   if (req.path.startsWith('/api/')) return notFound(req, res);
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
@@ -1368,7 +1387,7 @@ app.get('*', (req, res) => {
 // ── Global error handler (must be last) ─────────────────────
 app.use(errorHandler);
 
-db().then(() => {
+initDatabase().then(() => {
   app.listen(PORT, '0.0.0.0', () => {
     logger.info(`OCEAN AI CRM v2.0 running on port ${PORT}`);
     logger.info(`Dashboard: http://localhost:${PORT}`);
