@@ -83,12 +83,67 @@ table tr:hover{background:var(--gray-light)}
 .kanban-header{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:var(--gray-light);border-radius:8px;margin-bottom:8px}
 .kanban-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px;margin-bottom:8px;cursor:pointer;transition:box-shadow .2s}
 .kanban-card:hover{box-shadow:0 4px 12px rgba(0,0,0,.1)}
-.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px}
+.avatar{width:36px;height:36px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;cursor:pointer}
 .info-panel{background:var(--primary-light);border-radius:12px;padding:16px;margin-bottom:16px}
 @media(max-width:768px){.sidebar{width:64px}.main{margin-left:64px}.grid-2{grid-template-columns:1fr}.form-grid{grid-template-columns:1fr}}
+
+/* ── Login overlay ───────────────────────────────────────── */
+#login-overlay{position:fixed;inset:0;background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);display:flex;align-items:center;justify-content:center;z-index:9999}
+#login-overlay.hidden{display:none}
+.login-box{background:#fff;border-radius:20px;padding:40px;width:min(420px,95vw);box-shadow:0 24px 64px rgba(0,0,0,.4)}
+.login-logo{text-align:center;margin-bottom:32px}
+.login-logo .brand{font-size:28px;font-weight:800;color:#1a56db}
+.login-logo .tagline{font-size:13px;color:var(--gray);margin-top:4px}
+.login-error{background:#fee2e2;color:#dc2626;padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:12px;display:none}
+
+/* ── AI Chatbot ──────────────────────────────────────────── */
+#ai-fab{position:fixed;bottom:28px;right:28px;z-index:500;width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,#1a56db,#7c3aed);color:#fff;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(26,86,219,.5);transition:transform .2s}
+#ai-fab:hover{transform:scale(1.1)}
+#ai-fab.hidden{display:none}
+#ai-panel{position:fixed;bottom:96px;right:28px;z-index:500;width:min(400px,calc(100vw - 32px));background:#fff;border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,.2);display:flex;flex-direction:column;max-height:600px;border:1px solid var(--border);transition:opacity .2s,transform .2s;transform-origin:bottom right}
+#ai-panel.hidden{display:none}
+.ai-header{padding:16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.ai-header .title{font-weight:700;font-size:14px;color:#1a56db}
+.ai-header .subtitle{font-size:11px;color:var(--gray)}
+.ai-messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;min-height:200px;max-height:380px}
+.ai-msg{max-width:85%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
+.ai-msg.user{background:#e8effe;color:#1e3a8a;align-self:flex-end;border-bottom-right-radius:4px}
+.ai-msg.bot{background:var(--gray-light);color:#111827;align-self:flex-start;border-bottom-left-radius:4px}
+.ai-msg.typing{color:var(--gray);font-style:italic}
+.ai-input-row{padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px}
+.ai-input-row input{flex:1;padding:8px 12px;border-radius:8px;border:1px solid var(--border);font-size:13px;outline:none;font-family:inherit}
+.ai-input-row button{padding:8px 14px;border-radius:8px;background:var(--primary);color:#fff;border:none;cursor:pointer;font-size:13px;font-weight:600}
+.ai-not-configured{padding:16px;font-size:13px;color:var(--gray);text-align:center}
 </style>
 </head>
 <body>
+<!-- Login Overlay -->
+<div id="login-overlay">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="brand">OCEAN AI CRM</div>
+      <div class="tagline">Hệ thống quản lý tư vấn đầu tư FDI</div>
+    </div>
+    <div class="login-error" id="loginError"></div>
+    <form id="loginForm" onsubmit="doLogin(event)">
+      <div class="form-group">
+        <label>Tên đăng nhập / Email</label>
+        <input id="loginUser" name="username" type="text" placeholder="admin" required autocomplete="username">
+      </div>
+      <div class="form-group">
+        <label>Mật khẩu</label>
+        <input id="loginPass" name="password" type="password" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;padding:12px" id="loginBtn">
+        Đăng nhập
+      </button>
+    </form>
+    <p style="margin-top:16px;font-size:12px;color:var(--gray);text-align:center">
+      Tài khoản mặc định: <strong>admin</strong> / <strong>Admin@123</strong>
+    </p>
+  </div>
+</div>
+
 <!-- Sidebar -->
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
@@ -120,6 +175,10 @@ table tr:hover{background:var(--gray-light)}
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <span>Tra cứu</span>
     </button>
+    <button class="nav-item" id="nav-users" data-page="users" onclick="navigate('users',this)" style="display:none">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm-7 14a7 7 0 0 1 14 0"/><circle cx="19" cy="8" r="3"/><path d="M22 21a4 4 0 0 0-7-2.7"/></svg>
+      <span>Người dùng</span>
+    </button>
   </nav>
 </aside>
 
@@ -132,7 +191,10 @@ table tr:hover{background:var(--gray-light)}
     </div>
     <div class="flex items-center gap-12">
       <span class="fs-13 text-gray" id="currentDate"></span>
-      <div class="avatar">KG</div>
+      <div id="userBadge" class="flex items-center gap-8">
+        <span class="fs-12 text-gray" id="userName"></span>
+        <div class="avatar" id="userAvatar" title="Đăng xuất" onclick="doLogout()">KG</div>
+      </div>
     </div>
   </header>
   <main class="content" id="content">
@@ -147,8 +209,17 @@ table tr:hover{background:var(--gray-light)}
 const API = '';
 let state = { clients: [], contracts: [], cases: [], dashboard: null };
 
-async function api(url, opts) {
-  const res = await fetch(API + url, { headers: { 'Content-Type': 'application/json' }, ...opts });
+async function api(url, opts = {}) {
+  const token = localStorage.getItem('ocean_crm_token');
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(API + url, { ...opts, headers });
+  if (res.status === 401) {
+    localStorage.removeItem('ocean_crm_token');
+    localStorage.removeItem('ocean_crm_user');
+    location.reload();
+    return {};
+  }
   return res.json();
 }
 
@@ -214,6 +285,7 @@ async function render() {
     case 'cases': el.innerHTML = renderCases(); break;
     case 'finance': el.innerHTML = renderFinance(); break;
     case 'search': el.innerHTML = renderSearch(); break;
+    case 'users': el.innerHTML = await renderUsers(); break;
   }
 }
 
@@ -791,6 +863,92 @@ async function doSearch(q) {
   }
   if (total === 0) html = `<div class="card" style="text-align:center;padding:40px;color:var(--gray)">Không tìm thấy kết quả phù hợp với "${q}"</div>`;
   document.getElementById('searchResults').innerHTML = html;
+}
+
+// ============================================================
+// USERS & ROLES (Admin only)
+// ============================================================
+async function renderUsers() {
+  const user = authUser;
+  if (!user || user.role !== 'admin') {
+    return `<div class="card" style="text-align:center;padding:48px;color:var(--gray)">
+      <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 16px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <div style="font-size:16px;font-weight:600;margin-bottom:8px">Không có quyền truy cập</div>
+      <div>Chỉ Admin mới xem được trang này.</div>
+    </div>`;
+  }
+  const users = await api('/api/auth/users');
+  const roleBadge = r => ({ admin: 'danger', manager: 'warning', staff: 'info' })[r] || 'gray';
+  const roleLabel = r => ({ admin: 'Admin', manager: 'Manager', staff: 'Staff' })[r] || r;
+  return `
+    <div class="flex justify-between items-center mb-24">
+      <h2 style="font-size:22px">Quản lý Người dùng</h2>
+      <button class="btn btn-primary" onclick="showRegisterForm()">+ Thêm người dùng</button>
+    </div>
+    <div class="info-panel">
+      <b>Phân quyền:</b>
+      <span class="badge" style="color:#dc2626;background:#fee2e2;margin:0 8px">Admin</span> Toàn quyền — quản lý users, xem mọi dữ liệu
+      <span class="badge" style="color:#d97706;background:#fef3c7;margin:0 8px">Manager</span> Quản lý khách hàng, hợp đồng, hồ sơ
+      <span class="badge" style="color:#0284c7;background:#e0f2fe;margin:0 8px">Staff</span> Xem và cập nhật hồ sơ được giao
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr>
+          <th>Tên đăng nhập</th><th>Họ tên</th><th>Email</th>
+          <th>Vai trò</th><th>Trạng thái</th><th>Đăng nhập lần cuối</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${(Array.isArray(users) ? users : []).map(u => `
+            <tr>
+              <td><b>${u.username}</b>${u.id === authUser?.id ? ' <span class="badge" style="color:#059669;background:#d1fae5;font-size:10px">Bạn</span>' : ''}</td>
+              <td>${u.full_name || '—'}</td>
+              <td>${u.email}</td>
+              <td>${badge(roleLabel(u.role))}</td>
+              <td>${u.is_active ? '<span style="color:#059669">Hoạt động</span>' : '<span style="color:#dc2626">Vô hiệu</span>'}</td>
+              <td class="text-gray fs-12">${u.last_login ? new Date(u.last_login).toLocaleString('vi-VN') : 'Chưa đăng nhập'}</td>
+              <td>${u.id !== authUser?.id ? `<button class="btn btn-sm ${u.is_active ? 'btn-outline' : 'btn-primary'}" onclick="toggleUser('${u.id}','${u.username}',${u.is_active})">${u.is_active ? 'Vô hiệu hóa' : 'Kích hoạt'}</button>` : ''}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function showRegisterForm() {
+  showModal('Thêm người dùng mới', `
+    <form onsubmit="registerUser(event)">
+      <div class="form-grid">
+        <div class="form-group"><label>Tên đăng nhập *</label><input name="username" required placeholder="vd: nguyen_van_a"></div>
+        <div class="form-group"><label>Họ tên</label><input name="full_name" placeholder="Nguyễn Văn A"></div>
+        <div class="form-group"><label>Email *</label><input name="email" type="email" required></div>
+        <div class="form-group"><label>Mật khẩu *</label><input name="password" type="password" required placeholder="Tối thiểu 8 ký tự"></div>
+        <div class="form-group"><label>Vai trò</label>
+          <select name="role">
+            <option value="staff">Staff — Nhân viên</option>
+            <option value="manager">Manager — Quản lý</option>
+            <option value="admin">Admin — Toàn quyền</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex justify-between mt-16">
+        <button type="button" class="btn btn-ghost" onclick="closeModal()">Hủy</button>
+        <button type="submit" class="btn btn-primary">Tạo tài khoản</button>
+      </div>
+    </form>`);
+}
+
+async function registerUser(e) {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(e.target));
+  const res = await api('/api/auth/register', { method: 'POST', body: JSON.stringify(data) });
+  if (res.error) return alert('Lỗi: ' + res.error);
+  closeModal();
+  navigate('users');
+}
+
+async function toggleUser(id, username, isActive) {
+  if (!confirm(`${isActive ? 'Vô hiệu hóa' : 'Kích hoạt'} tài khoản "${username}"?`)) return;
+  await api(`/api/auth/users/${id}/toggle`, { method: 'PUT' });
+  navigate('users');
 }
 
 // ============================================================
@@ -1610,11 +1768,223 @@ async function saveCase(e, id) {
 
 async function deleteCase(id) { if (confirm('Xóa hồ sơ này?')) { await api(`/api/cases/${id}`, { method: 'DELETE' }); render(); } }
 
+// currentDate is set after auth init (in second script block)
+</script>
+
+<!-- AI Chatbot FAB -->
+<button id="ai-fab" class="hidden" onclick="toggleAiPanel()" title="Trợ lý AI OCEAN">
+  <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+    <path d="M12 2a10 10 0 0 1 10 10c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2"/>
+    <path d="M8 12h.01M12 12h.01M16 12h.01"/>
+    <circle cx="12" cy="12" r="1" fill="currentColor"/>
+    <circle cx="8" cy="12" r="1" fill="currentColor"/>
+    <circle cx="16" cy="12" r="1" fill="currentColor"/>
+  </svg>
+</button>
+
+<!-- AI Chat Panel -->
+<div id="ai-panel" class="hidden">
+  <div class="ai-header">
+    <div>
+      <div class="title">Trợ lý AI OCEAN</div>
+      <div class="subtitle">Tư vấn FDI, mỹ phẩm, quy định nhập khẩu</div>
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="toggleAiPanel()">✕</button>
+  </div>
+  <div class="ai-messages" id="aiMessages">
+    <div class="ai-msg bot">Xin chào! Tôi là trợ lý AI của OCEAN AI CRM. Tôi có thể giúp bạn về thủ tục đầu tư FDI, quy định mỹ phẩm/thực phẩm nhập khẩu, và quản lý hồ sơ. Bạn cần hỗ trợ gì?</div>
+  </div>
+  <div class="ai-input-row">
+    <input type="text" id="aiInput" placeholder="Nhập câu hỏi..." onkeydown="if(event.key==='Enter')sendAiMessage()">
+    <button onclick="sendAiMessage()" id="aiSendBtn">Gửi</button>
+  </div>
+</div>
+
+<script>
 // ============================================================
-// INIT
+// AUTH
+// ============================================================
+const AUTH_KEY = 'ocean_crm_token';
+const USER_KEY = 'ocean_crm_user';
+let authToken = null;
+let authUser = null;
+let aiHistory = [];
+
+function initAuth() {
+  const stored = localStorage.getItem(AUTH_KEY);
+  const storedUser = localStorage.getItem(USER_KEY);
+  if (stored && storedUser) {
+    authToken = stored;
+    authUser = JSON.parse(storedUser);
+    showApp();
+  } else {
+    document.getElementById('login-overlay').classList.remove('hidden');
+  }
+}
+
+async function doLogin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('loginBtn');
+  const errEl = document.getElementById('loginError');
+  errEl.style.display = 'none';
+  btn.textContent = 'Đang đăng nhập...';
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: document.getElementById('loginUser').value.trim(),
+        password: document.getElementById('loginPass').value,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Đăng nhập thất bại');
+    authToken = data.token;
+    authUser = data.user;
+    localStorage.setItem(AUTH_KEY, authToken);
+    localStorage.setItem(USER_KEY, JSON.stringify(authUser));
+    showApp();
+  } catch (err) {
+    errEl.textContent = err.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.textContent = 'Đăng nhập';
+    btn.disabled = false;
+  }
+}
+
+function doLogout() {
+  if (!confirm('Đăng xuất khỏi hệ thống?')) return;
+  localStorage.removeItem(AUTH_KEY);
+  localStorage.removeItem(USER_KEY);
+  authToken = null;
+  authUser = null;
+  document.getElementById('login-overlay').classList.remove('hidden');
+  document.getElementById('ai-fab').classList.add('hidden');
+  document.getElementById('ai-panel').classList.add('hidden');
+}
+
+function showApp() {
+  document.getElementById('login-overlay').classList.add('hidden');
+  document.getElementById('ai-fab').classList.remove('hidden');
+
+  // Update avatar/username
+  if (authUser) {
+    const initials = (authUser.full_name || authUser.username || 'U').slice(0, 2).toUpperCase();
+    document.getElementById('userAvatar').textContent = initials;
+    document.getElementById('userName').textContent = (authUser.full_name || authUser.username) + ' · ' + ({ admin: 'Admin', manager: 'Manager', staff: 'Staff' }[authUser.role] || authUser.role);
+  }
+
+  // Show Users nav only for admin
+  const usersNav = document.getElementById('nav-users');
+  if (usersNav && authUser?.role === 'admin') usersNav.style.display = '';
+
+  render();
+}
+
+// ============================================================
+// AI CHATBOT
+// ============================================================
+function toggleAiPanel() {
+  const panel = document.getElementById('ai-panel');
+  panel.classList.toggle('hidden');
+  if (!panel.classList.contains('hidden')) {
+    document.getElementById('aiInput').focus();
+  }
+}
+
+async function sendAiMessage() {
+  const input = document.getElementById('aiInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  input.value = '';
+  const sendBtn = document.getElementById('aiSendBtn');
+  sendBtn.disabled = true;
+
+  appendAiMessage(msg, 'user');
+  const typingEl = appendAiMessage('Đang soạn...', 'bot typing');
+
+  try {
+    const res = await fetch('/api/ai/chat/stream', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
+      },
+      body: JSON.stringify({ message: msg, history: aiHistory.slice(-10) }),
+    });
+
+    if (!res.ok) {
+      const errData = await res.json();
+      typingEl.textContent = errData.error || 'Lỗi khi kết nối AI';
+      typingEl.classList.remove('typing');
+      return;
+    }
+
+    typingEl.textContent = '';
+    typingEl.classList.remove('typing');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let fullReply = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const text = decoder.decode(value);
+      const lines = text.split('\n');
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const parsed = JSON.parse(line.slice(6));
+          if (parsed.text) {
+            fullReply += parsed.text;
+            typingEl.textContent = fullReply;
+            scrollAiToBottom();
+          }
+          if (parsed.error) {
+            typingEl.textContent = 'Lỗi: ' + parsed.error;
+          }
+        } catch (_) {}
+      }
+    }
+
+    aiHistory.push({ role: 'user', content: msg });
+    aiHistory.push({ role: 'assistant', content: fullReply });
+    if (aiHistory.length > 20) aiHistory = aiHistory.slice(-20);
+
+  } catch (err) {
+    typingEl.textContent = 'Lỗi kết nối: ' + err.message;
+    typingEl.classList.remove('typing');
+  } finally {
+    sendBtn.disabled = false;
+    input.focus();
+  }
+}
+
+function appendAiMessage(text, type) {
+  const el = document.createElement('div');
+  el.className = 'ai-msg ' + type;
+  el.textContent = text;
+  const container = document.getElementById('aiMessages');
+  container.appendChild(el);
+  scrollAiToBottom();
+  return el;
+}
+
+function scrollAiToBottom() {
+  const c = document.getElementById('aiMessages');
+  c.scrollTop = c.scrollHeight;
+}
+
+// ============================================================
+// INIT — called here so all functions above are already defined
 // ============================================================
 document.getElementById('currentDate').textContent = new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-render();
+initAuth();
 </script>
 </body>
 </html>

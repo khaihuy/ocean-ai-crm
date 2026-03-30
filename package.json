@@ -1,18 +1,28 @@
 {
   "name": "ocean-ai-crm-fdi",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "OCEAN AI - CRM Tư vấn Đầu tư FDI vào Việt Nam",
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "node server/index.js"
+    "dev": "nodemon server/index.js"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "bcryptjs": "^2.4.3",
     "better-sqlite3": "^11.0.0",
     "cors": "^2.8.5",
     "csv-parse": "^6.2.1",
     "dotenv": "^16.4.5",
-    "express": "^4.18.2"
+    "express": "^4.18.2",
+    "express-rate-limit": "^7.5.0",
+    "helmet": "^8.0.0",
+    "jsonwebtoken": "^9.0.2",
+    "winston": "^3.17.0",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
   },
   "engines": {
     "node": ">=18.0.0"

@@ -1,5 +1,6 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const logger = require('./logger');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'data', 'crm.db');
 
@@ -158,6 +159,22 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_activities_entity ON activities(entity_type, entity_id);
   CREATE INDEX IF NOT EXISTS idx_cosing_inci ON cosing_ingredients(inci_name);
   CREATE INDEX IF NOT EXISTS idx_cosing_cas ON cosing_ingredients(cas_no);
+
+  -- Người dùng hệ thống
+  CREATE TABLE IF NOT EXISTS users (
+    id TEXT PRIMARY KEY,
+    username TEXT NOT NULL UNIQUE,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    full_name TEXT,
+    role TEXT NOT NULL DEFAULT 'staff',
+    is_active INTEGER NOT NULL DEFAULT 1,
+    last_login TEXT,
+    created_at TEXT DEFAULT (datetime('now')),
+    updated_at TEXT DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_users_username ON users(username);
+  CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 `);
 
 // Migration: move any existing kr_ingredients rows into country_ingredients
@@ -205,7 +222,7 @@ if (!cols.includes('cosing_ref_no')) {
       )
     `).run();
     db.prepare("CREATE UNIQUE INDEX idx_cosing_inci_unique ON cosing_ingredients(LOWER(TRIM(inci_name)))").run();
-    console.log('✅ CosIng dedup migration complete');
+    logger.info('CosIng dedup migration complete');
   }
 }
 
