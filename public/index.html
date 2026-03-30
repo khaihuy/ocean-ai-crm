@@ -262,11 +262,8 @@ const API = '';
 let state = { clients: [], contracts: [], cases: [], dashboard: null };
 
 async function api(url, opts = {}) {
-  const token = localStorage.getItem('ocean_crm_token');
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
   const res = await fetch(API + url, { ...opts, headers });
-  if (res.status === 401) { localStorage.removeItem('ocean_crm_token'); localStorage.removeItem('ocean_crm_user'); location.reload(); return {}; }
   return res.json();
 }
 
@@ -1874,7 +1871,7 @@ function renderChatPage() {
       </div>
     </div>
     <div class="sc-suggestions" id="scSuggestions">
-      ${SC_SUGGESTIONS.map(s => `<button class="btn btn-outline btn-sm" onclick="scSend(${JSON.stringify(s)})" style="font-size:12px;border-radius:20px">${s}</button>`).join('')}
+      ${SC_SUGGESTIONS.map(s => `<button class="btn btn-outline btn-sm" onclick="scSend(this.textContent.trim())" style="font-size:12px;border-radius:20px">${s}</button>`).join('')}
     </div>
     <div class="sc-bar">
       <input id="scInput" type="text" placeholder="Hỏi về khách hàng, hợp đồng, hồ sơ, doanh thu..."
@@ -2332,9 +2329,8 @@ let authUser = null;
 let aiHistory = [];
 
 function initAuth() {
-  const token = localStorage.getItem('ocean_crm_token');
   const stored = localStorage.getItem('ocean_crm_user');
-  if (token && stored) {
+  if (stored) {
     authUser = JSON.parse(stored);
     showApp();
   } else {
@@ -2354,7 +2350,6 @@ async function doLogin(e) {
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Đăng nhập thất bại');
     authUser = data.user;
-    localStorage.setItem('ocean_crm_token', data.token);
     localStorage.setItem('ocean_crm_user', JSON.stringify(data.user));
     showApp();
   } catch (err) { errEl.textContent = err.message; errEl.style.display = 'block'; }
@@ -2363,7 +2358,7 @@ async function doLogin(e) {
 
 function doLogout() {
   if (!confirm('Đăng xuất khỏi hệ thống?')) return;
-  localStorage.removeItem('ocean_crm_token'); localStorage.removeItem('ocean_crm_user');
+  localStorage.removeItem('ocean_crm_user');
   authUser = null;
   location.reload();
 }
@@ -2456,7 +2451,7 @@ async function sendAiMessage() {
   const typingEl = appendAiMsg('Đang soạn...', 'bot typing');
   try {
     const res = await fetch('/api/ai/chat/stream', { method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('ocean_crm_token')||''}` },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ message: msg, history: aiHistory.slice(-10) }) });
     if (!res.ok) { const e = await res.json(); typingEl.textContent = e.error || 'Lỗi AI'; typingEl.classList.remove('typing'); return; }
     typingEl.textContent = ''; typingEl.classList.remove('typing');
