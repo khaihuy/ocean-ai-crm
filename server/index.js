@@ -1368,9 +1368,14 @@ app.get('*', (req, res) => {
 // ── Global error handler (must be last) ─────────────────────
 app.use(errorHandler);
 
-app.listen(PORT, '0.0.0.0', () => {
-  logger.info(`OCEAN AI CRM v2.0 running on port ${PORT}`);
-  logger.info(`Dashboard: http://localhost:${PORT}`);
+db().then(() => {
+  app.listen(PORT, '0.0.0.0', () => {
+    logger.info(`OCEAN AI CRM v2.0 running on port ${PORT}`);
+    logger.info(`Dashboard: http://localhost:${PORT}`);
+  });
+}).catch(err => {
+  logger.error('Failed to initialize database:', err);
+  process.exit(1);
 });
 
 module.exports = app;
