@@ -435,7 +435,7 @@ app.post('/api/cosing/import', async (req, res) => {
       count++;
     }
   });
-  tx();
+  await tx();
   res.json({ imported: count });
 });
 
@@ -576,7 +576,7 @@ app.post('/api/cosing/import-csv', async (req, res) => {
       imported++;
     }
   });
-  tx();
+  await tx();
 
   invalidateInciCache();
   const total = (await db.prepare('SELECT COUNT(*) as c FROM cosing_ingredients').get()).c;
@@ -669,7 +669,7 @@ app.get('/api/cosing/auto-import', async (req, res) => {
             totalImported++;
           }
         });
-        tx();
+        await tx();
       }
 
       const overallPct = Math.round(((fi + 1) / COSING_CSV_FILES.length) * 100);
@@ -803,7 +803,7 @@ app.post('/api/country-db/import', async (req, res) => {
       imported++;
     }
   });
-  tx();
+  await tx();
 
   const total = (await db.prepare('SELECT COUNT(*) as c FROM country_ingredients WHERE country = ?').get(country)).c;
   res.json({ imported, skipped, total_in_db: total, country });
@@ -952,7 +952,7 @@ app.post('/api/notebooks/:id/sources', upload.single('file'), async (req, res) =
     await db.prepare('INSERT INTO notebook_sources (id, notebook_id, filename, original_name, file_type, file_size, content_text) VALUES (?, ?, ?, ?, ?, ?, ?)')
       .run(srcId, req.params.id, req.file.originalname, req.file.originalname, req.file.mimetype, req.file.size, text);
 
-    const chunkCount = indexSourceChunks(srcId, req.params.id, text);
+    const chunkCount = await indexSourceChunks(srcId, req.params.id, text);
     await db.prepare('UPDATE notebooks SET updated_at=? WHERE id=?').run(now(), req.params.id);
 
     // Auto-summarize with OpenAI (async, don't block response)
@@ -1016,14 +1016,14 @@ app.post('/api/notebooks/:id/chat', async (req, res) => {
     .run(genId(), req.params.id, 'user', message);
 
   // Retrieve relevant chunks via FTS
-  const chunks = sourceCount > 0 ? retrieveChunks(req.params.id, message) : [];
+  const chunks = sourceCount > 0 ? await retrieveChunks(req.params.id, message) : [];
 
   // If FTS returns nothing, fall back to first chunks of all sources
   let contextChunks = chunks;
   if (contextChunks.length === 0 && sourceCount > 0) {
     contextChunks = await db.prepare(`
       SELECT f.chunk_text, f.source_id, f.chunk_index, s.original_name as source_name
-      FROM notebook_chunks_fts f
+      FROM notebook_chunks f
       JOIN notebook_sources s ON s.id = f.source_id
       WHERE f.notebook_id = ?
       LIMIT 8
@@ -1351,7 +1351,7 @@ Hôm nay: ${new Date().toLocaleDateString('vi-VN')}.`;
         for (const tc of choice.message.tool_calls) {
           const args = JSON.parse(tc.function.arguments || '{}');
           send({ type: 'tool', name: tc.function.name });
-          const result = executeCrmTool(tc.function.name, args);
+          const result = await executeCrmTool(tc.function.name, args);
           loopMsgs.push({ role: 'tool', tool_call_id: tc.id, content: JSON.stringify(result) });
         }
         continue; // next iteration to get final answer
