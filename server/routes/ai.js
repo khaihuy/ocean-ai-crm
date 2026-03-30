@@ -3,7 +3,7 @@ const Anthropic = require('@anthropic-ai/sdk');
 const { z } = require('zod');
 const { optionalAuth } = require('../middleware/auth');
 const logger = require('../logger');
-const db = require('../database');
+const db = require('../db-shim');
 
 const router = express.Router();
 
@@ -140,11 +140,11 @@ router.post('/ingredient-check', optionalAuth, async (req, res, next) => {
     if (!inci_name) return res.status(400).json({ error: 'Thiếu tên INCI' });
 
     // Fetch ingredient data from DB
-    const ingredient = db.prepare(
+    const ingredient = await db.prepare(
       "SELECT * FROM cosing_ingredients WHERE LOWER(TRIM(inci_name)) = LOWER(TRIM(?))"
     ).get(inci_name);
 
-    const countryRegs = db.prepare(
+    const countryRegs = await db.prepare(
       "SELECT * FROM country_regs WHERE LOWER(TRIM(inci_name)) = LOWER(TRIM(?)) ORDER BY country"
     ).all(inci_name);
 
