@@ -175,6 +175,10 @@ table tr:hover{background:var(--gray-light)}
       <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <span>Tra cứu</span>
     </button>
+    <button class="nav-item" id="nav-users" data-page="users" onclick="navigate('users',this)" style="display:none">
+      <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M12 2a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm-7 14a7 7 0 0 1 14 0"/><circle cx="19" cy="8" r="3"/><path d="M22 21a4 4 0 0 0-7-2.7"/></svg>
+      <span>Người dùng</span>
+    </button>
   </nav>
 </aside>
 
@@ -205,8 +209,17 @@ table tr:hover{background:var(--gray-light)}
 const API = '';
 let state = { clients: [], contracts: [], cases: [], dashboard: null };
 
-async function api(url, opts) {
-  const res = await fetch(API + url, { headers: { 'Content-Type': 'application/json' }, ...opts });
+async function api(url, opts = {}) {
+  const token = localStorage.getItem('ocean_crm_token');
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(API + url, { ...opts, headers });
+  if (res.status === 401) {
+    localStorage.removeItem('ocean_crm_token');
+    localStorage.removeItem('ocean_crm_user');
+    location.reload();
+    return {};
+  }
   return res.json();
 }
 
@@ -272,6 +285,7 @@ async function render() {
     case 'cases': el.innerHTML = renderCases(); break;
     case 'finance': el.innerHTML = renderFinance(); break;
     case 'search': el.innerHTML = renderSearch(); break;
+    case 'users': el.innerHTML = await renderUsers(); break;
   }
 }
 
@@ -849,6 +863,92 @@ async function doSearch(q) {
   }
   if (total === 0) html = `<div class="card" style="text-align:center;padding:40px;color:var(--gray)">Không tìm thấy kết quả phù hợp với "${q}"</div>`;
   document.getElementById('searchResults').innerHTML = html;
+}
+
+// ============================================================
+// USERS & ROLES (Admin only)
+// ============================================================
+async function renderUsers() {
+  const user = authUser;
+  if (!user || user.role !== 'admin') {
+    return `<div class="card" style="text-align:center;padding:48px;color:var(--gray)">
+      <svg width="48" height="48" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24" style="margin:0 auto 16px"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      <div style="font-size:16px;font-weight:600;margin-bottom:8px">Không có quyền truy cập</div>
+      <div>Chỉ Admin mới xem được trang này.</div>
+    </div>`;
+  }
+  const users = await api('/api/auth/users');
+  const roleBadge = r => ({ admin: 'danger', manager: 'warning', staff: 'info' })[r] || 'gray';
+  const roleLabel = r => ({ admin: 'Admin', manager: 'Manager', staff: 'Staff' })[r] || r;
+  return `
+    <div class="flex justify-between items-center mb-24">
+      <h2 style="font-size:22px">Quản lý Người dùng</h2>
+      <button class="btn btn-primary" onclick="showRegisterForm()">+ Thêm người dùng</button>
+    </div>
+    <div class="info-panel">
+      <b>Phân quyền:</b>
+      <span class="badge" style="color:#dc2626;background:#fee2e2;margin:0 8px">Admin</span> Toàn quyền — quản lý users, xem mọi dữ liệu
+      <span class="badge" style="color:#d97706;background:#fef3c7;margin:0 8px">Manager</span> Quản lý khách hàng, hợp đồng, hồ sơ
+      <span class="badge" style="color:#0284c7;background:#e0f2fe;margin:0 8px">Staff</span> Xem và cập nhật hồ sơ được giao
+    </div>
+    <div class="card" style="padding:0;overflow:hidden">
+      <table>
+        <thead><tr>
+          <th>Tên đăng nhập</th><th>Họ tên</th><th>Email</th>
+          <th>Vai trò</th><th>Trạng thái</th><th>Đăng nhập lần cuối</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${(Array.isArray(users) ? users : []).map(u => `
+            <tr>
+              <td><b>${u.username}</b>${u.id === authUser?.id ? ' <span class="badge" style="color:#059669;background:#d1fae5;font-size:10px">Bạn</span>' : ''}</td>
+              <td>${u.full_name || '—'}</td>
+              <td>${u.email}</td>
+              <td>${badge(roleLabel(u.role))}</td>
+              <td>${u.is_active ? '<span style="color:#059669">Hoạt động</span>' : '<span style="color:#dc2626">Vô hiệu</span>'}</td>
+              <td class="text-gray fs-12">${u.last_login ? new Date(u.last_login).toLocaleString('vi-VN') : 'Chưa đăng nhập'}</td>
+              <td>${u.id !== authUser?.id ? `<button class="btn btn-sm ${u.is_active ? 'btn-outline' : 'btn-primary'}" onclick="toggleUser('${u.id}','${u.username}',${u.is_active})">${u.is_active ? 'Vô hiệu hóa' : 'Kích hoạt'}</button>` : ''}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+function showRegisterForm() {
+  showModal('Thêm người dùng mới', `
+    <form onsubmit="registerUser(event)">
+      <div class="form-grid">
+        <div class="form-group"><label>Tên đăng nhập *</label><input name="username" required placeholder="vd: nguyen_van_a"></div>
+        <div class="form-group"><label>Họ tên</label><input name="full_name" placeholder="Nguyễn Văn A"></div>
+        <div class="form-group"><label>Email *</label><input name="email" type="email" required></div>
+        <div class="form-group"><label>Mật khẩu *</label><input name="password" type="password" required placeholder="Tối thiểu 8 ký tự"></div>
+        <div class="form-group"><label>Vai trò</label>
+          <select name="role">
+            <option value="staff">Staff — Nhân viên</option>
+            <option value="manager">Manager — Quản lý</option>
+            <option value="admin">Admin — Toàn quyền</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex justify-between mt-16">
+        <button type="button" class="btn btn-ghost" onclick="closeModal()">Hủy</button>
+        <button type="submit" class="btn btn-primary">Tạo tài khoản</button>
+      </div>
+    </form>`);
+}
+
+async function registerUser(e) {
+  e.preventDefault();
+  const data = Object.fromEntries(new FormData(e.target));
+  const res = await api('/api/auth/register', { method: 'POST', body: JSON.stringify(data) });
+  if (res.error) return alert('Lỗi: ' + res.error);
+  closeModal();
+  navigate('users');
+}
+
+async function toggleUser(id, username, isActive) {
+  if (!confirm(`${isActive ? 'Vô hiệu hóa' : 'Kích hoạt'} tài khoản "${username}"?`)) return;
+  await api(`/api/auth/users/${id}/toggle`, { method: 'PUT' });
+  navigate('users');
 }
 
 // ============================================================
@@ -1668,11 +1768,7 @@ async function saveCase(e, id) {
 
 async function deleteCase(id) { if (confirm('Xóa hồ sơ này?')) { await api(`/api/cases/${id}`, { method: 'DELETE' }); render(); } }
 
-// ============================================================
-// INIT
-// ============================================================
-document.getElementById('currentDate').textContent = new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-initAuth();
+// currentDate is set after auth init (in second script block)
 </script>
 
 <!-- AI Chatbot FAB -->
@@ -1778,28 +1874,15 @@ function showApp() {
   if (authUser) {
     const initials = (authUser.full_name || authUser.username || 'U').slice(0, 2).toUpperCase();
     document.getElementById('userAvatar').textContent = initials;
-    document.getElementById('userName').textContent = authUser.full_name || authUser.username;
+    document.getElementById('userName').textContent = (authUser.full_name || authUser.username) + ' · ' + ({ admin: 'Admin', manager: 'Manager', staff: 'Staff' }[authUser.role] || authUser.role);
   }
+
+  // Show Users nav only for admin
+  const usersNav = document.getElementById('nav-users');
+  if (usersNav && authUser?.role === 'admin') usersNav.style.display = '';
 
   render();
 }
-
-// Override the global api() to include JWT token
-const _origApi = api;
-// Redefine api to include Authorization header
-window._apiWithAuth = async function(url, opts = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
-  if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-  const res = await fetch(url, { ...opts, headers });
-  if (res.status === 401) { doLogout(); throw new Error('Phiên đăng nhập hết hạn'); }
-  return res.json();
-};
-
-// Patch the existing api function
-Object.defineProperty(window, 'api', {
-  get: () => window._apiWithAuth,
-  configurable: true,
-});
 
 // ============================================================
 // AI CHATBOT
@@ -1896,6 +1979,12 @@ function scrollAiToBottom() {
   const c = document.getElementById('aiMessages');
   c.scrollTop = c.scrollHeight;
 }
+
+// ============================================================
+// INIT — called here so all functions above are already defined
+// ============================================================
+document.getElementById('currentDate').textContent = new Date().toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+initAuth();
 </script>
 </body>
 </html>
