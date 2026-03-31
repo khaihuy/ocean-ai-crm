@@ -262,7 +262,8 @@ const API = '';
 let state = { clients: [], contracts: [], cases: [], dashboard: null };
 
 async function api(url, opts = {}) {
-  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  const token = localStorage.getItem('ocean_crm_token');
+  const headers = { 'Content-Type': 'application/json', ...(token ? { 'Authorization': `Bearer ${token}` } : {}), ...(opts.headers || {}) };
   const res = await fetch(API + url, { ...opts, headers });
   return res.json();
 }
@@ -2351,6 +2352,7 @@ async function doLogin(e) {
     if (!res.ok) throw new Error(data.error || 'Đăng nhập thất bại');
     authUser = data.user;
     localStorage.setItem('ocean_crm_user', JSON.stringify(data.user));
+    if (data.token) localStorage.setItem('ocean_crm_token', data.token);
     showApp();
   } catch (err) { errEl.textContent = err.message; errEl.style.display = 'block'; }
   finally { btn.textContent = 'Đăng nhập'; btn.disabled = false; }
@@ -2359,6 +2361,7 @@ async function doLogin(e) {
 function doLogout() {
   if (!confirm('Đăng xuất khỏi hệ thống?')) return;
   localStorage.removeItem('ocean_crm_user');
+  localStorage.removeItem('ocean_crm_token');
   authUser = null;
   location.reload();
 }

@@ -252,7 +252,7 @@ app.get('/api/dashboard', async (req, res) => {
       active: (await db.prepare("SELECT COUNT(*) as c FROM cases WHERE status NOT IN ('Đã cấp phép', 'Từ chối')").get()).c,
       urgent: (await db.prepare("SELECT COUNT(*) as c FROM cases WHERE priority = 'Cao' AND status NOT IN ('Đã cấp phép', 'Từ chối')").get()).c,
       by_status: await db.prepare('SELECT status, COUNT(*) as count FROM cases GROUP BY status').all(),
-      upcoming_deadlines: await db.prepare("SELECT cs.*, ct.contract_no, cl.name as client_name FROM cases cs LEFT JOIN contracts ct ON cs.contract_id = ct.id LEFT JOIN clients cl ON ct.client_id = cl.id WHERE cs.deadline IS NOT NULL AND cs.status NOT IN ('Đã cấp phép', 'Từ chối') AND cs.deadline >= CURRENT_DATE AND cs.deadline <= CURRENT_DATE + INTERVAL '30 days' ORDER BY cs.deadline ASC").all(),
+      upcoming_deadlines: await db.prepare("SELECT cs.*, ct.contract_no, cl.name as client_name FROM cases cs LEFT JOIN contracts ct ON cs.contract_id = ct.id LEFT JOIN clients cl ON ct.client_id = cl.id WHERE cs.deadline IS NOT NULL AND cs.status NOT IN ('Đã cấp phép', 'Từ chối') AND cs.deadline::date >= CURRENT_DATE AND cs.deadline::date <= CURRENT_DATE + INTERVAL '30 days' ORDER BY cs.deadline ASC").all(),
     },
     recent_activities: await db.prepare('SELECT * FROM activities ORDER BY created_at DESC LIMIT 20').all(),
   };
@@ -1281,8 +1281,8 @@ async function executeCrmTool(name, args) {
         LEFT JOIN clients cl ON ct.client_id = cl.id
         WHERE cs.deadline IS NOT NULL
           AND cs.status NOT IN ('Đã cấp phép','Từ chối')
-          AND cs.deadline >= CURRENT_DATE
-          AND cs.deadline <= CURRENT_DATE + (? || ' days')::INTERVAL
+          AND cs.deadline::date >= CURRENT_DATE
+          AND cs.deadline::date <= CURRENT_DATE + (? || ' days')::INTERVAL
         ORDER BY cs.deadline ASC
       `).all(days);
     }
