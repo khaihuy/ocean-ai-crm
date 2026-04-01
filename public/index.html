@@ -1590,6 +1590,14 @@ async function startAutoImport() {
         btn.style.background = 'var(--success)';
         loadCosingStats();
         evtSrc.close();
+        setTimeout(() => {
+          document.getElementById('cosingImportPanel').style.display = 'none';
+          btn.textContent = 'Import tất cả thành phần từ CosIng EU';
+          btn.style.background = '';
+          prog.style.display = 'none';
+          bar.style.width = '0%';
+          msg.textContent = '';
+        }, 3000);
       }
       if (d.status === 'error') {
         msg.innerHTML = `<span style="color:var(--danger)">Lỗi: ${d.msg}</span>`;

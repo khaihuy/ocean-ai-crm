@@ -323,9 +323,9 @@ function levenshtein(a, b) {
   return prev[lb];
 }
 
-function fuzzySearchNames(query, maxDist) {
+async function fuzzySearchNames(query, maxDist) {
   const q = query.toLowerCase();
-  const names = getInciNamesCache();
+  const names = await getInciNamesCache();
   const results = [];
   for (const name of names) {
     const n = name.toLowerCase();
@@ -343,17 +343,17 @@ app.get('/api/cosing/search', async (req, res) => {
   const trimmed = q.trim();
   const term = `%${trimmed}%`;
   const maxRows = Math.min(parseInt(lim) || 50, 200);
-  let sql = `SELECT * FROM cosing_ingredients WHERE (inci_name LIKE ? OR cas_no LIKE ? OR functions LIKE ?)`;
+  let sql = `SELECT * FROM cosing_ingredients WHERE (inci_name ILIKE ? OR cas_no ILIKE ? OR functions ILIKE ?)`;
   const params = [term, term, term];
   if (annex && annex !== 'all') { sql += ' AND annex = ?'; params.push(annex); }
   sql += ' ORDER BY inci_name ASC LIMIT ?';
   params.push(maxRows);
   const results = await db.prepare(sql).all(...params);
 
-  // Fuzzy fallback when no exact/LIKE match
+  // Fuzzy fallback when no exact/ILIKE match
   if (results.length === 0 && trimmed.length >= 3) {
     const maxDist = Math.max(1, Math.floor(trimmed.length / 4));
-    const fuzzyNames = fuzzySearchNames(trimmed, maxDist);
+    const fuzzyNames = await fuzzySearchNames(trimmed, maxDist);
     if (fuzzyNames.length > 0) {
       const placeholders = fuzzyNames.map(() => '?').join(',');
       const fuzzyResults = await db.prepare(
@@ -728,7 +728,7 @@ app.get('/api/country-db/search', async (req, res) => {
   if (!q || q.trim().length < 2) return res.json([]);
   const term = `%${q.trim()}%`;
   const maxRows = Math.min(parseInt(lim) || 50, 200);
-  let sql = `SELECT * FROM country_ingredients WHERE (inci_name LIKE ? OR local_name LIKE ? OR cas_no LIKE ?)`;
+  let sql = `SELECT * FROM country_ingredients WHERE (inci_name ILIKE ? OR local_name ILIKE ? OR cas_no ILIKE ?)`;
   const params = [term, term, term];
   if (country && country !== 'ALL') { sql += ' AND country = ?'; params.push(country); }
   sql += ' ORDER BY country, inci_name ASC LIMIT ?';
